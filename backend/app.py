@@ -1,0 +1,267 @@
+import os
+import feedparser
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from datetime import datetime
+from werkzeug.utils import secure_filename
+
+# Local imports
+from models import db, Post
+from image_generator import generate_post_image, generate_hashtags, PLACEHOLDER_PATH
+from facebook_poster import post_to_facebook
+from football_birthdays import get_week_birthdays
+from birthday_image import generate_birthday_image
+from routes_birthday import birthday_routes      # ✅ single correct import (Blueprint)
+
+# ---------------- App Setup ---------------- #
+
+app = Flask(__name__)
+CORS(app)
+
+# ✅ Register the birthday blueprint routes
+app.register_blueprint(birthday_routes)
+
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+DB_PATH = os.path.join(BASE_DIR, "posts.db")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db.init_app(app)
+
+with app.app_context():
+    db.create_all()
+
+# ---------------- Helpers ---------------- #
+
+def get_main_image(article_url: str):
+    """Try to extract a main image from an article page."""
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(article_url, headers=headers, timeout=10)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # OpenGraph image
+        og_img = soup.find("meta", property="og:image")
+        if og_img and og_img.get("content"):
+            return og_img["content"]
+
+        # First <img>
+        img = soup.find("img")
+        if img and img.get("src"):
+            return urljoin(article_url, img["src"])
+    except Exception as e:
+        print("[ERROR] get_main_image:", e)
+    return None
+
+# ---------------- Routes ---------------- #
+
+@app.route("/posts", methods=["GET"])
+def get_posts():
+    status = request.args.get("status")
+    query = Post.query
+    if status in ["draft", "approved", "published", "rejected"]:
+        query = query.filter_by(status=status)
+    posts = query.order_by(Post.created_at.desc()).all()
+    return jsonify([p.serialize() for p in posts])
+
+
+@app.route("/posts", methods=["POST"])
+def create_post():
+    data = request.json or {}
+
+    title = data.get("title")
+    summary = data.get("summary", "")
+    full_description = data.get("full_description", "")
+    article_url = data.get("article_url", "")
+    image_url = data.get("image_url", "")
+
+    if not title:
+        return jsonify({"error": "Title is required"}), 400
+
+    img_path = generate_post_image(title, image_url, article_url, summary)
+    hashtags = generate_hashtags(title, summary)
+
+    post = Post(
+        title=title,
+        link=article_url,
+        summary=summary,
+        full_description=full_description,
+        image=img_path,
+        hashtags=",".join(hashtags),
+        status="draft",
+    )
+    db.session.add(post)
+    db.session.commit()
+
+    return jsonify(post.serialize()), 201
+
+
+@app.route("/approve/<int:post_id>", methods=["POST"])
+def approve_post(post_id):
+    try:
+        post = Post.query.get(post_id)
+        if not post:
+            return jsonify({"status": "error", "message": "Post not found"}), 404
+
+        post.status = "approved"
+        db.session.commit()
+
+        fb_result = post_to_facebook(
+            title=post.title,
+            summary=post.summary,
+            hashtags=post.hashtags.split(",") if post.hashtags else [],
+            image_path=post.image if post.image else None
+        )
+
+        return jsonify({
+            "status": "success",
+            "message": f"Post {post_id} approved",
+            "post": post.serialize(),
+            "facebook": fb_result
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/reject/<int:post_id>", methods=["POST"])
+def reject_post(post_id):
+    try:
+        post = Post.query.get(post_id)
+        if not post:
+            return jsonify({"status": "error", "message": "Post not found"}), 404
+
+        post.status = "rejected"
+        db.session.commit()
+        return jsonify({"status": "success", "message": f"Post {post_id} rejected"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/posts/<int:post_id>/publish", methods=["POST"])
+def publish_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    post.status = "published"
+    db.session.commit()
+    return jsonify(post.serialize())
+
+
+@app.route("/fetch_news", methods=["POST"])
+def fetch_news():
+    """Fetch football news from RSS feeds and save as draft posts."""
+    from rss_feeds import RSS_FEEDS
+
+    new_posts = []
+    for feed_url in RSS_FEEDS:
+        feed = feedparser.parse(feed_url)
+        for entry in feed.entries[:5]:  # limit 5 per feed
+            if Post.query.filter_by(title=entry.title).first():
+                continue
+
+            image_url = get_main_image(entry.link)
+            summary = entry.get("summary", "")
+            img_path = generate_post_image(entry.title, image_url, entry.link, summary)
+            hashtags = generate_hashtags(entry.title, summary)
+
+            post = Post(
+                title=entry.title,
+                link=entry.link,
+                summary=summary,
+                full_description=summary,
+                image=img_path,
+                hashtags=",".join(hashtags),
+                status="draft",
+            )
+            db.session.add(post)
+            new_posts.append(post)
+
+    db.session.commit()
+    return jsonify([p.serialize() for p in new_posts])
+
+
+@app.route("/upload_manual_post", methods=["POST"])
+def upload_manual_post():
+    file = request.files.get("image")
+    title = request.form.get("title", "").strip()
+    summary = request.form.get("summary", "")
+    post_now = request.form.get("post_now", "false").lower() == "true"
+
+    if not file or not title:
+        return jsonify({"error": "Image and title are required"}), 400
+
+    upload_dir = os.path.join(BASE_DIR, "static", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(upload_dir, filename)
+    file.save(filepath)
+
+    img_path = generate_post_image(title, filepath, "", summary)
+    hashtags = generate_hashtags(title, summary)
+
+    post = Post(
+        title=title,
+        summary=summary,
+        full_description=summary,
+        image=img_path,
+        hashtags=",".join(hashtags),
+        status="approved" if post_now else "draft",
+    )
+    db.session.add(post)
+    db.session.commit()
+
+    fb_result = None
+    if post_now:
+        fb_result = post_to_facebook(
+            title=post.title,
+            summary=post.summary,
+            hashtags=hashtags,
+            image_path=post.image
+        )
+
+    return jsonify({
+        "status": "success",
+        "message": "Manual post created successfully",
+        "post": post.serialize(),
+        "facebook": fb_result
+    })
+
+
+@app.route("/static/images/<path:filename>")
+def serve_image(filename):
+    return send_from_directory(os.path.join(BASE_DIR, "static", "images"), filename)
+
+
+@app.route("/static/<path:filename>")
+def serve_static(filename):
+    return send_from_directory(os.path.join(BASE_DIR, "static"), filename)
+
+
+@app.route("/delete_post/<int:post_id>", methods=["DELETE"])
+def delete_post(post_id):
+    try:
+        post = Post.query.get(post_id)
+        if not post:
+            return jsonify({"status": "error", "message": "Post not found"}), 404
+
+        if post.image:
+            img_path = os.path.join(BASE_DIR, post.image) if not os.path.isabs(post.image) else post.image
+            try:
+                if os.path.exists(img_path):
+                    os.remove(img_path)
+            except Exception as e:
+                print("[WARN] could not remove image:", e)
+
+        db.session.delete(post)
+        db.session.commit()
+        return jsonify({"status": "success", "message": f"Post {post_id} deleted"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ---------------- Main ---------------- #
+if __name__ == "__main__":
+    print("🚀 Football Poster backend running on http://127.0.0.1:5000")
+    app.run(debug=True, port=5000)

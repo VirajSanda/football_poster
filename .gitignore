@@ -1,0 +1,29 @@
+# Python cache
+backend/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/*.pyc
+backend/*.pyo
+backend/.mypy_cache/
+
+# Generated images (adjust path as needed)
+backend/static/birthdays
+backend/static/images
+backend/static/uploads
+backend/static/temp
+!backend/static/.gitkeep  # keep folder structure if needed
+
+# Node and build files (if you have frontend)
+frontend/node_modules/
+frontend/build/
+
+# Environment files
+.env
+*.env
+
+# Virtual environment
+venv/
+.env/
+.venv/
+envs/
+env/
