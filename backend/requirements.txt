@@ -4,3 +4,4 @@ gunicorn
 requests
 pillow
 feedparser
+beautifulsoup4
