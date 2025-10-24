@@ -216,3 +216,7 @@ def generate_hashtags(title, summary=""):
             hashtags.append(f"#{clean.capitalize()}")
     hashtags = list(dict.fromkeys(hashtags))
     return hashtags[:6]
+
+def is_valid_url(url: str) -> bool:
+    """Check if a string looks like a valid http(s) URL."""
+    return bool(re.match(r'^https?://', str(url or '').strip()))
