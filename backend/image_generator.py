@@ -136,6 +136,10 @@ def add_bottom_banner(img, title_text):
 
 def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
     """Download, resize, and brand image for Facebook posts."""
+    if not img_url or not is_valid_url(img_url):
+        print(f"⚠️ Skipping invalid image URL: {img_url}")
+        return None  # skip invalid images
+        
     try:
         if not img_url:
             img_url = get_main_image(article_url)
@@ -146,6 +150,11 @@ def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
         if resp.status_code != 200:
             return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
+        # Ensure it's an actual image
+        if 'image' not in resp.headers.get('Content-Type', ''):
+            print(f"⚠️ Not an image: {img_url}")
+            return None
+            
         img = Image.open(resp.raw).convert("RGBA")
 
         # --- Crop/resize to Facebook aspect ratio (1200x630) --- #

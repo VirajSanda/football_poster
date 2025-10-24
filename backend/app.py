@@ -83,6 +83,10 @@ def create_post():
         return jsonify({"error": "Title is required"}), 400
 
     img_path = generate_post_image(title, image_url, article_url, summary)
+    
+    if not img_path:
+        print(f"⚠️ Skipped {entry.title} due to missing image")
+        continue  # skip this entry
     hashtags = generate_hashtags(title, summary)
 
     post = Post(
@@ -164,6 +168,10 @@ def fetch_news():
             image_url = get_main_image(entry.link)
             summary = entry.get("summary", "")
             img_path = generate_post_image(entry.title, image_url, entry.link, summary)
+            
+            if not img_path:
+                print(f"⚠️ Skipped {entry.title} due to missing image")
+                continue  # skip this entry
             hashtags = generate_hashtags(entry.title, summary)
 
             post = Post(
@@ -199,6 +207,10 @@ def upload_manual_post():
     file.save(filepath)
 
     img_path = generate_post_image(title, filepath, "", summary)
+    
+    if not img_path:
+        print(f"⚠️ Skipped {entry.title} due to missing image")
+        continue  # skip this entry
     hashtags = generate_hashtags(title, summary)
 
     post = Post(
