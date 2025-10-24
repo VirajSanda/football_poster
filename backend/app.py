@@ -86,7 +86,7 @@ def create_post():
     
     if not img_path:
         print(f"⚠️ Skipped {entry.title} due to missing image")
-        continue  # skip this entry
+        return jsonify({"error": "Failed to generate post image"}), 500
     hashtags = generate_hashtags(title, summary)
 
     post = Post(
@@ -210,7 +210,7 @@ def upload_manual_post():
     
     if not img_path:
         print(f"⚠️ Skipped {entry.title} due to missing image")
-        continue  # skip this entry
+        return jsonify({"error": "Failed to generate post image"}), 500
     hashtags = generate_hashtags(title, summary)
 
     post = Post(
