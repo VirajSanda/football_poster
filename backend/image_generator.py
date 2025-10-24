@@ -1,5 +1,6 @@
 import os
 import re
+import io
 import uuid
 import random
 import requests
@@ -97,14 +98,13 @@ def add_bottom_banner(img, title_text):
     # Random team-color gradient
     team1, team2 = random.choice(TEAM_COLORS)
     for y in range(banner_h):
-        # Fades from nearly transparent (top) to solid (bottom)
         fade = y / banner_h
         for x in range(W):
             t = x / W
             r = int(team1[0] * (1 - t) + team2[0] * t)
             g = int(team1[1] * (1 - t) + team2[1] * t)
             b = int(team1[2] * (1 - t) + team2[2] * t)
-            alpha = int(40 + 200 * (fade ** 1.5))  # soft fade-in curve
+            alpha = int(40 + 200 * (fade ** 1.5))
             banner.putpixel((x, y), (r, g, b, alpha))
 
     img.paste(banner, (0, H - banner_h), banner)
@@ -124,7 +124,6 @@ def add_bottom_banner(img, title_text):
     brightness = get_image_brightness(img)
     text_color = (255, 255, 255, 255) if brightness < 140 else (10, 10, 10, 255)
 
-    # Text with subtle shadow
     for line in lines:
         tw = draw.textlength(line, font=font)
         x = (W - tw) // 2
@@ -139,24 +138,29 @@ def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
     """Download, resize, and brand image for Facebook posts."""
     if not img_url or not is_valid_url(img_url):
         print(f"⚠️ Skipping invalid image URL: {img_url}")
-        return None  # skip invalid images
-        
+        return None
+
     try:
         if not img_url:
             img_url = get_main_image(article_url)
         if not img_url:
             return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
-        resp = requests.get(img_url, timeout=10, stream=True)
-        if resp.status_code != 200:
-            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
+        resp = requests.get(img_url, timeout=10)
+        resp.raise_for_status()
 
-        # Ensure it's an actual image
-        if 'image' not in resp.headers.get('Content-Type', ''):
-            print(f"⚠️ Not an image: {img_url}")
+        # ✅ Validate Content-Type
+        content_type = resp.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            print(f"⚠️ Not an image: {img_url} ({content_type})")
             return None
-            
-        img = Image.open(resp.raw).convert("RGBA")
+
+        # ✅ Safely load image bytes
+        try:
+            img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+        except Exception as e:
+            print(f"[ERROR] Invalid image content from {img_url}: {e}")
+            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
         # --- Crop/resize to Facebook aspect ratio (1200x630) --- #
         img_ratio = img.width / img.height
@@ -191,7 +195,6 @@ def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
             except Exception as e:
                 print("[WARN] Failed to paste logo:", e)
 
-        # Save
         filename = f"{uuid.uuid4().hex}.png"
         filepath = os.path.join(STATIC_DIR, filename)
         img.save(filepath, "PNG")
@@ -218,6 +221,7 @@ def generate_hashtags(title, summary=""):
     hashtags = list(dict.fromkeys(hashtags))
     return hashtags[:6]
 
+
 def is_valid_url(url: str) -> bool:
     """Check if a string looks like a valid http(s) URL."""
-    return bool(re.match(r'^https?://', str(url or '').strip()))
+    return bool(re.match(r"^https?://", str(url or "").strip()))
