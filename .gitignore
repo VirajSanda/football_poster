@@ -16,6 +16,7 @@ backend/static/temp
 
 # Node and build files (if you have frontend)
 frontend/node_modules/
+frontend/src/config.js
 
 # Environment files
 .env
