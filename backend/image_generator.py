@@ -136,28 +136,30 @@ def add_bottom_banner(img, title_text):
 
 def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
     """Download, resize, and brand image for Facebook posts."""
-    if not img_url or not is_valid_url(img_url):
-        print(f"⚠️ Skipping invalid image URL: {img_url}")
-        return None
-
     try:
-        if not img_url:
-            img_url = get_main_image(article_url)
-        if not img_url:
+        if not img_url or not is_valid_url(img_url):
+            print(f"⚠️ Skipping invalid image URL: {img_url}")
             return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
-        resp = requests.get(img_url, timeout=10)
-        resp.raise_for_status()
+        # Skip SVGs or non-image extensions
+        if img_url.lower().endswith(".svg") or any(x in img_url.lower() for x in [".gif", ".webp"]):
+            print(f"⚠️ Unsupported image format: {img_url}")
+            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
-        # ✅ Validate Content-Type
+        resp = requests.get(img_url, timeout=10, stream=True, headers={"User-Agent": "Mozilla/5.0"})
+        if resp.status_code != 200:
+            print(f"⚠️ Failed to fetch image ({resp.status_code}): {img_url}")
+            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
+
+        # Ensure it's an actual image
         content_type = resp.headers.get("Content-Type", "")
-        if not content_type.startswith("image/"):
-            print(f"⚠️ Not an image: {img_url} ({content_type})")
-            return None
+        if "image" not in content_type or "svg" in content_type:
+            print(f"⚠️ Not a valid image content type: {content_type}")
+            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
-        # ✅ Safely load image bytes
+        # Attempt to open the image safely
         try:
-            img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+            img = Image.open(resp.raw).convert("RGBA")
         except Exception as e:
             print(f"[ERROR] Invalid image content from {img_url}: {e}")
             return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
@@ -195,9 +197,14 @@ def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
             except Exception as e:
                 print("[WARN] Failed to paste logo:", e)
 
+        # Save safely
         filename = f"{uuid.uuid4().hex}.png"
         filepath = os.path.join(STATIC_DIR, filename)
-        img.save(filepath, "PNG")
+
+        # Ensure file is written to disk (avoid fileno() issues)
+        with open(filepath, "wb") as f:
+            img.save(f, format="PNG")
+
         return filepath
 
     except Exception as e:
