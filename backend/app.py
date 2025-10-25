@@ -14,19 +14,19 @@ from image_generator import generate_post_image, generate_hashtags, PLACEHOLDER_
 from facebook_poster import post_to_facebook
 from football_birthdays import get_week_birthdays
 from birthday_image import generate_birthday_image
-from routes_birthday import birthday_routes      # ✅ single correct import (Blueprint)
+from routes_birthday import birthday_routes      # ✅ Blueprint import
 
 # ---------------- App Setup ---------------- #
 
-app = Flask(__name__)
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+app = Flask(__name__, static_folder="static")
 CORS(app)
 
 # ✅ Register the birthday blueprint routes
 app.register_blueprint(birthday_routes)
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, "posts.db")
-
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -34,6 +34,7 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+
 
 # ---------------- Helpers ---------------- #
 
@@ -56,6 +57,7 @@ def get_main_image(article_url: str):
     except Exception as e:
         print("[ERROR] get_main_image:", e)
     return None
+
 
 # ---------------- Routes ---------------- #
 
@@ -229,14 +231,12 @@ def upload_manual_post():
     })
 
 
-@app.route("/static/images/<path:filename>")
-def serve_image(filename):
-    return send_from_directory(os.path.join(BASE_DIR, "static", "images"), filename)
-
-
+# ✅ Unified static serving (works for all /static/* paths)
 @app.route("/static/<path:filename>")
 def serve_static(filename):
-    return send_from_directory(os.path.join(BASE_DIR, "static"), filename)
+    """Serve any file inside the /static directory."""
+    static_dir = os.path.join(BASE_DIR, "static")
+    return send_from_directory(static_dir, filename)
 
 
 @app.route("/delete_post/<int:post_id>", methods=["DELETE"])
