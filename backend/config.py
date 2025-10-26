@@ -3,3 +3,4 @@ import os
 # Load from environment variables for security
 FACEBOOK_PAGE_ID = "771893249345631"
 FACEBOOK_ACCESS_TOKEN = "EAAUvS3oj7H4BPq5PWrBqfT83I0IHLZCyWgjP58FzhDwrm32owSFijlaeIYucflgN0lcg3osIc8MZBtQnLTJI31SIZAtG07PZCxqDGOpROiZBG8NjE1Eh5OXURoWS5TyQBz8mxa23daV1tqJTZBAZCqUZBTyPH0RTBOVIOyGtO0ldwvseUk0a3du4uvOYr9s1lVxf7SPiSgJd"
+API_BASE_URL="https://footballposter-production-67cc.up.railway.app"

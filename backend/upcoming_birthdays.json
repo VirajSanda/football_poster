@@ -1,0 +1,572 @@
+[
+  {
+    "name": "Edson Álvarez",
+    "team": "West Ham United",
+    "dob": "1997-10-24",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/6/6d/Edson_%C3%81lvarez_2024.jpg"
+  },
+  {
+    "name": "Cristo González",
+    "team": "F.C. Arouca",
+    "dob": "1997-10-24",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/7/79/Cristo_Gonzalez_2019.jpg"
+  },
+  {
+    "name": "Sardar Azmoun",
+    "team": "AS Roma",
+    "dob": "1995-01-01",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/f/fc/Sardar_Azmoun_2022.jpg"
+  },
+  {
+    "name": "Toni Kroos",
+    "team": "Real Madrid",
+    "dob": "1990-01-04",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Toni_Kroos_2021.jpg"
+  },
+  {
+    "name": "Cristiano Ronaldo",
+    "team": "Al Nassr",
+    "dob": "1985-02-05",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/8c/Cristiano_Ronaldo_2018.jpg"
+  },
+  {
+    "name": "Neymar Jr.",
+    "team": "Al-Hilal",
+    "dob": "1992-02-05",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/5c/Neymar_2022.jpg"
+  },
+  {
+    "name": "Riyad Mahrez",
+    "team": "Al-Ahli",
+    "dob": "1991-02-21",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3e/Riyad_Mahrez_2023.jpg"
+  },
+  {
+    "name": "Casemiro",
+    "team": "Manchester United",
+    "dob": "1992-02-23",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Casemiro_2018.jpg"
+  },
+  {
+    "name": "Sergio Ramos",
+    "team": "Sevilla",
+    "dob": "1986-03-30",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/Sergio_Ramos_2018.jpg"
+  },
+  {
+    "name": "Antoine Griezmann",
+    "team": "Atlético Madrid",
+    "dob": "1991-03-21",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Antoine_Griezmann_2021.jpg"
+  },
+  {
+    "name": "Koke",
+    "team": "Atlético Madrid",
+    "dob": "1992-01-08",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/9/9c/Koke_2021.jpg"
+  },
+  {
+    "name": "N'Golo Kanté",
+    "team": "Al-Ittihad",
+    "dob": "1991-03-29",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/86/N%27Golo_Kant%C3%A9_2020.jpg"
+  },
+  {
+    "name": "Kevin De Bruyne",
+    "team": "Manchester City",
+    "dob": "1991-06-28",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Kevin_De_Bruyne_2021.jpg"
+  },
+  {
+    "name": "Mohamed Salah",
+    "team": "Liverpool",
+    "dob": "1992-06-15",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Mohamed_Salah_2020.jpg"
+  },
+  {
+    "name": "Luka Modrić",
+    "team": "Real Madrid",
+    "dob": "1985-09-09",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/a/af/Luka_Modric_2021.jpg"
+  },
+  {
+    "name": "Phil Foden",
+    "team": "Manchester City",
+    "dob": "2000-05-28",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/f/fa/Phil_Foden_2021.jpg"
+  },
+  {
+    "name": "Frenkie de Jong",
+    "team": "Barcelona",
+    "dob": "1997-05-12",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Frenkie_de_Jong_2023.jpg"
+  },
+  {
+    "name": "Erling Haaland",
+    "team": "Manchester City",
+    "dob": "2000-07-21",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/0/03/Erling_Haaland_2023.jpg"
+  },
+  {
+    "name": "Virgil van Dijk",
+    "team": "Liverpool",
+    "dob": "1991-07-08",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Virgil_van_Dijk_2022.jpg"
+  },
+  {
+    "name": "Harry Kane",
+    "team": "Bayern Munich",
+    "dob": "1993-07-28",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/d/d1/Harry_Kane_2023.jpg"
+  },
+  {
+    "name": "Robert Lewandowski",
+    "team": "Barcelona",
+    "dob": "1988-08-21",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Robert_Lewandowski_2023.jpg"
+  },
+  {
+    "name": "Gavi",
+    "team": "Barcelona",
+    "dob": "2004-08-05",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Gavi_2022.jpg"
+  },
+  {
+    "name": "Olivier Giroud",
+    "team": "AC Milan",
+    "dob": "1986-09-30",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/f/f8/Olivier_Giroud_2022.jpg"
+  },
+  {
+    "name": "Diego Maradona",
+    "team": "Napoli (Legend)",
+    "dob": "1960-10-30",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/4/4e/Diego_Maradona_1986.jpg"
+  },
+  {
+    "name": "Gerard Piqué",
+    "team": "Barcelona (Legend)",
+    "dob": "1987-10-31",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/b/bc/Gerard_Pique_2021.jpg"
+  },
+  {
+    "name": "Marcus Rashford",
+    "team": "Manchester United",
+    "dob": "1997-10-31",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/2/27/Marcus_Rashford_2021.jpg"
+  },
+  {
+    "name": "David De Gea",
+    "team": "Manchester United",
+    "dob": "1990-11-07",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/d/d1/David_de_Gea_2018.jpg"
+  },
+  {
+    "name": "Paulo Dybala",
+    "team": "AS Roma",
+    "dob": "1993-11-15",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Paulo_Dybala_2023.jpg"
+  },
+  {
+    "name": "Pedri",
+    "team": "Barcelona",
+    "dob": "2002-11-25",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/7/74/Pedri_2022.jpg"
+  },
+  {
+    "name": "Kylian Mbappé",
+    "team": "Paris Saint-Germain",
+    "dob": "1998-12-20",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/a/a8/Kylian_Mbapp%C3%A9_2019.jpg"
+  },
+  {
+    "name": "Karim Benzema",
+    "team": "Al-Ittihad",
+    "dob": "1987-12-19",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/6/6c/Karim_Benzema_2022.jpg"
+  },
+  {
+    "name": "Thiago Silva",
+    "team": "Chelsea",
+    "dob": "1984-09-22",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/0/0c/Thiago_Silva_2021.jpg"
+  },
+  {
+    "name": "Jude Bellingham",
+    "team": "Real Madrid",
+    "dob": "2003-06-29",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/56/Jude_Bellingham_2023.jpg"
+  },
+  {
+    "name": "Rodri",
+    "team": "Manchester City",
+    "dob": "1996-06-22",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/4/4d/Rodri_2023.jpg"
+  },
+  {
+    "name": "Son Heung-min",
+    "team": "Tottenham Hotspur",
+    "dob": "1992-07-08",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/a/a1/Son_Heung-min_2023.jpg"
+  },
+  {
+    "name": "Declan Rice",
+    "team": "Arsenal",
+    "dob": "1999-01-14",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/f/f3/Declan_Rice_2023.jpg"
+  },
+  {
+    "name": "Bukayo Saka",
+    "team": "Arsenal",
+    "dob": "2001-09-05",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/88/Bukayo_Saka_2022.jpg"
+  },
+  {
+    "name": "Gabriel Martinelli",
+    "team": "Arsenal",
+    "dob": "2001-06-18",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Gabriel_Martinelli_2023.jpg"
+  },
+  {
+    "name": "Martin Ødegaard",
+    "team": "Arsenal",
+    "dob": "1998-12-17",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Martin_Odegaard_2023.jpg"
+  },
+  {
+    "name": "Enzo Fernández",
+    "team": "Chelsea",
+    "dob": "2001-01-17",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/54/Enzo_Fernandez_2023.jpg"
+  },
+  {
+    "name": "Rafael Leão",
+    "team": "AC Milan",
+    "dob": "1999-06-10",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/0/0d/Rafael_Leao_2023.jpg"
+  },
+  {
+    "name": "Lautaro Martínez",
+    "team": "Inter Milan",
+    "dob": "1997-08-22",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/5c/Lautaro_Martinez_2023.jpg"
+  },
+  {
+    "name": "Andre Onana",
+    "team": "Manchester United",
+    "dob": "1996-04-02",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/a/a0/Andre_Onana_2023.jpg"
+  },
+  {
+    "name": "Lisandro Martínez",
+    "team": "Manchester United",
+    "dob": "1998-01-18",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/Lisandro_Martinez_2023.jpg"
+  },
+  {
+    "name": "Raphaël Varane",
+    "team": "Manchester United",
+    "dob": "1993-04-25",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/84/Raphael_Varane_2022.jpg"
+  },
+  {
+    "name": "Bruno Fernandes",
+    "team": "Manchester United",
+    "dob": "1994-09-08",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Bruno_Fernandes_2020.jpg"
+  },
+  {
+    "name": "David Beckham",
+    "team": "Manchester United (Legend)",
+    "dob": "1975-05-02",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/d/d1/David_Beckham_2019.jpg"
+  },
+  {
+    "name": "Zinedine Zidane",
+    "team": "France (Legend)",
+    "dob": "1972-06-23",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/4/47/Zinedine_Zidane_2021.jpg"
+  },
+  {
+    "name": "Pele",
+    "team": "Brazil (Legend)",
+    "dob": "1940-10-23",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Pele_2008.jpg"
+  },
+  {
+    "name": "Ronaldinho",
+    "team": "Brazil (Legend)",
+    "dob": "1980-03-21",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/7/7a/Ronaldinho_2019.jpg"
+  },
+  {
+    "name": "Kaka",
+    "team": "Brazil (Legend)",
+    "dob": "1982-04-22",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Kaka_2018.jpg"
+  },
+  {
+    "name": "Andrea Pirlo",
+    "team": "Italy (Legend)",
+    "dob": "1979-05-19",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/8b/Andrea_Pirlo_2018.jpg"
+  },
+  {
+    "name": "Francesco Totti",
+    "team": "Roma (Legend)",
+    "dob": "1976-09-27",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/f/f6/Francesco_Totti_2016.jpg"
+  },
+  {
+    "name": "Gianluigi Buffon",
+    "team": "Italy (Legend)",
+    "dob": "1978-01-28",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/0/0a/Gianluigi_Buffon_2021.jpg"
+  },
+  {
+    "name": "Xavi Hernández",
+    "team": "Barcelona (Legend)",
+    "dob": "1980-01-25",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/0/0e/Xavi_Hernandez_2021.jpg"
+  },
+  {
+    "name": "Andrés Iniesta",
+    "team": "Vissel Kobe",
+    "dob": "1984-05-11",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/b/b4/Andres_Iniesta_2020.jpg"
+  },
+  {
+    "name": "Gerard Moreno",
+    "team": "Villarreal",
+    "dob": "1992-04-07",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/54/Gerard_Moreno_2023.jpg"
+  },
+  {
+    "name": "Thibaut Courtois",
+    "team": "Real Madrid",
+    "dob": "1992-05-11",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Thibaut_Courtois_2022.jpg"
+  },
+  {
+    "name": "Eden Hazard",
+    "team": "Chelsea (Legend)",
+    "dob": "1991-01-07",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/0/03/Eden_Hazard_2022.jpg"
+  },
+  {
+    "name": "Raheem Sterling",
+    "team": "Chelsea",
+    "dob": "1994-12-08",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/36/Raheem_Sterling_2022.jpg"
+  },
+  {
+    "name": "João Félix",
+    "team": "Barcelona",
+    "dob": "1999-11-10",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/1f/Joao_Felix_2023.jpg"
+  },
+  {
+    "name": "Mason Mount",
+    "team": "Manchester United",
+    "dob": "1999-01-10",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/Mason_Mount_2023.jpg"
+  },
+  {
+    "name": "Romelu Lukaku",
+    "team": "Roma",
+    "dob": "1993-05-13",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Romelu_Lukaku_2023.jpg"
+  },
+  {
+    "name": "Luis Suárez",
+    "team": "Inter Miami",
+    "dob": "1987-01-24",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Luis_Suarez_2023.jpg"
+  },
+  {
+    "name": "Edinson Cavani",
+    "team": "Boca Juniors",
+    "dob": "1987-02-14",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/8c/Edinson_Cavani_2023.jpg"
+  },
+  {
+    "name": "Angel Di María",
+    "team": "Benfica",
+    "dob": "1988-02-14",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Angel_Di_Maria_2023.jpg"
+  },
+  {
+    "name": "Alexis Sánchez",
+    "team": "Inter Milan",
+    "dob": "1988-12-19",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Alexis_Sanchez_2023.jpg"
+  },
+  {
+    "name": "Paul Pogba",
+    "team": "Juventus",
+    "dob": "1993-03-15",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/31/Paul_Pogba_2021.jpg"
+  },
+  {
+    "name": "Sadio Mané",
+    "team": "Al-Nassr",
+    "dob": "1992-04-10",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/b/bb/Sadio_Mane_2023.jpg"
+  },
+  {
+    "name": "Lionel Messi",
+    "team": "Inter Miami / Argentina",
+    "dob": "1987-06-24",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/89/Lionel_Messi_2022_FIFA_World_Cup.jpg"
+  },
+  {
+    "name": "Cristiano Ronaldo",
+    "team": "Al Nassr / Portugal",
+    "dob": "1985-02-05",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/8c/Cristiano_Ronaldo_2018.jpg"
+  },
+  {
+    "name": "Neymar Jr.",
+    "team": "Al Hilal / Brazil",
+    "dob": "1992-02-05",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/7/7e/Neymar_Jr_2022.jpg"
+  },
+  {
+    "name": "Kylian Mbappé",
+    "team": "Real Madrid / France",
+    "dob": "1998-12-20",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/1f/Kylian_Mbappe_2018.jpg"
+  },
+  {
+    "name": "Erling Haaland",
+    "team": "Manchester City / Norway",
+    "dob": "2000-07-21",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/5d/Erling_Haaland_2023.jpg"
+  },
+  {
+    "name": "Kevin De Bruyne",
+    "team": "Manchester City / Belgium",
+    "dob": "1991-06-28",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/88/Kevin_De_Bruyne_2021.jpg"
+  },
+  {
+    "name": "Robert Lewandowski",
+    "team": "Barcelona / Poland",
+    "dob": "1988-08-21",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/a/a3/Robert_Lewandowski_2021.jpg"
+  },
+  {
+    "name": "Mohamed Salah",
+    "team": "Liverpool / Egypt",
+    "dob": "1992-06-15",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Mohamed_Salah_2018.jpg"
+  },
+  {
+    "name": "Harry Kane",
+    "team": "Bayern Munich / England",
+    "dob": "1993-07-28",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/5a/Harry_Kane_2018.jpg"
+  },
+  {
+    "name": "Karim Benzema",
+    "team": "Al-Ittihad / France",
+    "dob": "1987-12-19",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Karim_Benzema_2021.jpg"
+  },
+  {
+    "name": "Zinedine Zidane",
+    "team": "Real Madrid Legend / France",
+    "dob": "1972-06-23",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/Zinedine_Zidane_2019.jpg"
+  },
+  {
+    "name": "Diego Maradona",
+    "team": "Argentina Legend",
+    "dob": "1960-10-30",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/4/4f/Diego_Maradona_1986.jpg"
+  },
+  {
+    "name": "Pelé",
+    "team": "Brazil Legend",
+    "dob": "1940-10-23",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/58/Pele_1970.jpg"
+  },
+  {
+    "name": "Ronaldinho",
+    "team": "Brazil Legend",
+    "dob": "1980-03-21",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Ronaldinho_2019.jpg"
+  },
+  {
+    "name": "David Beckham",
+    "team": "Manchester United / England Legend",
+    "dob": "1975-05-02",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/9/9b/David_Beckham_2019.jpg"
+  },
+  {
+    "name": "Gerard Piqué",
+    "team": "Barcelona Legend / Spain",
+    "dob": "1987-02-02",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/d/d6/Gerard_Pique_2018.jpg"
+  },
+  {
+    "name": "Andrés Iniesta",
+    "team": "Vissel Kobe / Spain",
+    "dob": "1984-05-11",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/8/80/Andres_Iniesta_2018.jpg"
+  },
+  {
+    "name": "Xavi Hernández",
+    "team": "Barcelona / Spain",
+    "dob": "1980-01-25",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/d/da/Xavi_Hernandez_2019.jpg"
+  },
+  {
+    "name": "Luka Modrić",
+    "team": "Real Madrid / Croatia",
+    "dob": "1985-09-09",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/a/a8/Luka_Modric_2018.jpg"
+  },
+  {
+    "name": "Sergio Ramos",
+    "team": "Sevilla / Spain",
+    "dob": "1986-03-30",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Sergio_Ramos_2018.jpg"
+  },
+  {
+    "name": "Gianluigi Buffon",
+    "team": "Juventus Legend / Italy",
+    "dob": "1978-01-28",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/2/2e/Gianluigi_Buffon_2018.jpg"
+  },
+  {
+    "name": "Paolo Maldini",
+    "team": "AC Milan Legend / Italy",
+    "dob": "1968-06-26",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/13/Paolo_Maldini_2010.jpg"
+  },
+  {
+    "name": "Thierry Henry",
+    "team": "Arsenal Legend / France",
+    "dob": "1977-08-17",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/5/55/Thierry_Henry_2020.jpg"
+  },
+  {
+    "name": "Didier Drogba",
+    "team": "Chelsea Legend / Ivory Coast",
+    "dob": "1978-03-11",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Didier_Drogba_2019.jpg"
+  },
+  {
+    "name": "Wayne Rooney",
+    "team": "Manchester United / England Legend",
+    "dob": "1985-10-24",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/2/29/Wayne_Rooney_2016.jpg"
+  },
+  {
+    "name": "Marcus Rashford",
+    "team": "Manchester United / England",
+    "dob": "1997-10-31",
+    "photo_url": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Marcus_Rashford_2018.jpg"
+  }
+]

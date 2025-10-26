@@ -288,6 +288,8 @@ function ManualUpload() {
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
   const [postNow, setPostNow] = useState(false);
+  const [scheduleLater, setScheduleLater] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -303,6 +305,12 @@ function ManualUpload() {
     formData.append("image", image);
     formData.append("post_now", postNow);
 
+    if (scheduleLater && scheduledTime) {
+      // backend supports ISO or 'YYYY-MM-DD HH:mm'
+      const formatted = new Date(scheduledTime).toISOString();
+      formData.append("scheduled_time", formatted);
+    }
+
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/upload_manual_post`, {
@@ -316,6 +324,8 @@ function ManualUpload() {
       setImage(null);
       setPreview(null);
       setPostNow(false);
+      setScheduleLater(false);
+      setScheduledTime("");
     } catch (err) {
       alert("Error uploading post.");
     } finally {
@@ -335,12 +345,14 @@ function ManualUpload() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
+
         <textarea
           placeholder="Summary (optional)"
           className="w-full border rounded px-3 py-2"
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
         />
+
         <input
           type="file"
           accept="image/*"
@@ -361,21 +373,50 @@ function ManualUpload() {
           />
         )}
 
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={postNow}
-            onChange={(e) => setPostNow(e.target.checked)}
-          />
-          Post to Facebook immediately
-        </label>
+        <div className="flex flex-col gap-2 mt-4">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={postNow}
+              disabled={scheduleLater}
+              onChange={(e) => setPostNow(e.target.checked)}
+            />
+            Post to Facebook immediately
+          </label>
+
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={scheduleLater}
+              disabled={postNow}
+              onChange={(e) => setScheduleLater(e.target.checked)}
+            />
+            Schedule Facebook post
+          </label>
+
+          {scheduleLater && (
+            <input
+              type="datetime-local"
+              className="w-full border rounded px-3 py-2"
+              value={scheduledTime}
+              onChange={(e) => setScheduledTime(e.target.value)}
+              required
+            />
+          )}
+        </div>
 
         <button
           type="submit"
           disabled={loading}
           className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
         >
-          {loading ? "Uploading..." : "Upload Post"}
+          {loading
+            ? "Uploading..."
+            : scheduleLater
+            ? "Schedule Post"
+            : postNow
+            ? "Post Now"
+            : "Save Draft"}
         </button>
       </form>
     </div>
@@ -558,4 +599,3 @@ function BirthdayGenerator() {
     </div>
   );
 }
-

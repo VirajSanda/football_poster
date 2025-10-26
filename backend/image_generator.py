@@ -137,32 +137,20 @@ def add_bottom_banner(img, title_text):
 def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
     """Download, resize, and brand image for Facebook posts."""
     try:
-        if not img_url or not is_valid_url(img_url):
-            print(f"⚠️ Skipping invalid image URL: {img_url}")
-            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
+        if img_url and os.path.exists(img_url):
+            img = Image.open(img_url).convert("RGBA")
+        else:
+            # Remote URL mode
+            if not img_url:
+                img_url = get_main_image(article_url)
+            if not img_url:
+                return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
-        # Skip SVGs or non-image extensions
-        if img_url.lower().endswith(".svg") or any(x in img_url.lower() for x in [".gif", ".webp"]):
-            print(f"⚠️ Unsupported image format: {img_url}")
-            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
+            resp = requests.get(img_url, timeout=10, stream=True)
+            if resp.status_code != 200:
+                return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
-        resp = requests.get(img_url, timeout=10, stream=True, headers={"User-Agent": "Mozilla/5.0"})
-        if resp.status_code != 200:
-            print(f"⚠️ Failed to fetch image ({resp.status_code}): {img_url}")
-            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
-
-        # Ensure it's an actual image
-        content_type = resp.headers.get("Content-Type", "")
-        if "image" not in content_type or "svg" in content_type:
-            print(f"⚠️ Not a valid image content type: {content_type}")
-            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
-
-        # Attempt to open the image safely
-        try:
             img = Image.open(resp.raw).convert("RGBA")
-        except Exception as e:
-            print(f"[ERROR] Invalid image content from {img_url}: {e}")
-            return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
         # --- Crop/resize to Facebook aspect ratio (1200x630) --- #
         img_ratio = img.width / img.height

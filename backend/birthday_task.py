@@ -3,8 +3,7 @@ import requests
 import os
 from datetime import datetime, timezone
 from backend.football_birthdays import get_week_birthdays
-
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:5000/api/birthdays")
+from config import API_BASE_URL  # ✅ use config file
 
 def run_daily_birthday_task():
     """
