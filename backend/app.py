@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 
 # Local imports
 from models import db, Post
-from image_generator import generate_post_image, generate_hashtags, PLACEHOLDER_PATH
+from image_generator import generate_post_image, generate_hashtags, PLACEHOLDER_PATH, generate_post_image_nocrop
 from facebook_poster import post_to_facebook, post_to_facebook_scheduled
 from football_birthdays import get_week_birthdays
 from birthday_image import generate_birthday_image
@@ -210,7 +210,7 @@ def upload_manual_post():
     file.save(filepath)
 
     # Generate post image via image generator (so alignment/style stays consistent)
-    img_path = generate_post_image(title, filepath, "", summary)
+    img_path = generate_post_image_nocrop(title, filepath, "", summary)
     
     if not img_path:
         print(f"⚠️ Skipped {entry.title} due to missing image")

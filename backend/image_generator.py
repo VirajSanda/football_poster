@@ -199,11 +199,102 @@ def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
         print("[ERROR] download_and_rebrand:", e)
         return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
+def download_and_rebrand_nocrop(img_url, article_url, title="Kick Off Zone"):
+    """Rebrand the image (no resizing/cropping) — keeps original size and fits banner to image width."""
+    try:
+        # --- Load image from local or remote --- #
+        if img_url and os.path.exists(img_url):
+            img = Image.open(img_url).convert("RGBA")
+        else:
+            if not img_url:
+                img_url = get_main_image(article_url)
+            if not img_url:
+                return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
 
+            resp = requests.get(img_url, timeout=10, stream=True)
+            if resp.status_code != 200:
+                return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
+
+            img = Image.open(resp.raw).convert("RGBA")
+
+        W, H = img.size  # ✅ Use the original size, no resizing
+
+        # --- Add bottom banner within original dimensions --- #
+        banner_h = int(H * 0.25)
+        banner = Image.new("RGBA", (W, banner_h))
+
+        # Random team-color gradient (soft fade up)
+        team1, team2 = random.choice(TEAM_COLORS)
+        for y in range(banner_h):
+            fade = y / banner_h
+            for x in range(W):
+                t = x / W
+                r = int(team1[0] * (1 - t) + team2[0] * t)
+                g = int(team1[1] * (1 - t) + team2[1] * t)
+                b = int(team1[2] * (1 - t) + team2[2] * t)
+                alpha = int(40 + 200 * (fade ** 1.5))
+                banner.putpixel((x, y), (r, g, b, alpha))
+
+        img.paste(banner, (0, H - banner_h), banner)
+
+        # --- Title text inside image width --- #
+        draw = ImageDraw.Draw(img)
+        font_size = int(W * 0.05)  # Scaled by image width
+        font = load_sport_font(font_size)
+        lines = wrap_text(draw, title, font, W - 100)
+        while len(lines) > 2 and font_size > 20:
+            font_size = int(font_size * 0.9)
+            font = load_sport_font(font_size)
+            lines = wrap_text(draw, title, font, W - 100)
+
+        total_h = len(lines) * (font_size + 6)
+        y = H - banner_h + (banner_h - total_h) // 2 + 5
+
+        brightness = get_image_brightness(img)
+        text_color = (255, 255, 255, 255) if brightness < 140 else (10, 10, 10, 255)
+
+        for line in lines:
+            tw = draw.textlength(line, font=font)
+            x = (W - tw) // 2
+            draw.text((x + 3, y + 3), line, font=font, fill=(0, 0, 0, 160))
+            draw.text((x, y), line, font=font, fill=text_color)
+            y += font_size + 4
+
+        # --- Watermark --- #
+        font_wm = load_sport_font(max(18, int(W * 0.02)))
+        wm_text = "Kick Off Zone"
+        draw.text((int(W * 0.03), H - int(W * 0.07)), wm_text, font=font_wm, fill=(255, 215, 0, 255))
+
+        # --- Logo --- #
+        if os.path.exists(LOGO_PATH):
+            try:
+                logo = Image.open(LOGO_PATH).convert("RGBA")
+                logo_w = int(W * 0.1)
+                ratio = logo_w / logo.width
+                logo = logo.resize((logo_w, int(logo.height * ratio)), Image.Resampling.LANCZOS)
+                img.paste(logo, (W - logo_w - int(W * 0.03), H - logo.height - int(W * 0.03)), logo)
+            except Exception as e:
+                print("[WARN] Failed to paste logo:", e)
+
+        # --- Save safely --- #
+        filename = f"{uuid.uuid4().hex}_nocrop.png"
+        filepath = os.path.join(STATIC_DIR, filename)
+
+        with open(filepath, "wb") as f:
+            img.save(f, format="PNG")
+
+        return filepath
+
+    except Exception as e:
+        print("[ERROR] download_and_rebrand_nocrop:", e)
+        return PLACEHOLDER_PATH if os.path.exists(PLACEHOLDER_PATH) else None
+     
 def generate_post_image(title, image_url, article_url, summary=""):
     """Main entry for backend to generate post image."""
     return download_and_rebrand(image_url, article_url, title)
 
+def generate_post_image_nocrop(title, image_url, article_url, summary=""):
+    return download_and_rebrand_nocrop(image_url, article_url, title)
 
 def generate_hashtags(title, summary=""):
     """Generate simple hashtags from title + summary."""
