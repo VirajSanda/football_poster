@@ -11,10 +11,10 @@ from werkzeug.utils import secure_filename
 # Local imports
 from models import db, Post
 from image_generator import generate_post_image, generate_hashtags, PLACEHOLDER_PATH
-from facebook_poster import post_to_facebook
+from facebook_poster import post_to_facebook, post_to_facebook_scheduled
 from football_birthdays import get_week_birthdays
 from birthday_image import generate_birthday_image
-from routes_birthday import birthday_routes      # ✅ Blueprint import
+from routes_birthday import birthday_routes  # ✅ Blueprint import
 
 # ---------------- App Setup ---------------- #
 
@@ -190,6 +190,7 @@ def upload_manual_post():
     title = request.form.get("title", "").strip()
     summary = request.form.get("summary", "")
     post_now = request.form.get("post_now", "false").lower() == "true"
+    scheduled_time_str = request.form.get("scheduled_time", "").strip()
 
     if not file or not title:
         return jsonify({"error": "Image and title are required"}), 400
@@ -200,8 +201,22 @@ def upload_manual_post():
     filepath = os.path.join(upload_dir, filename)
     file.save(filepath)
 
+    # Generate post image via image generator (so alignment/style stays consistent)
     img_path = generate_post_image(title, filepath, "", summary)
     hashtags = generate_hashtags(title, summary)
+
+    scheduled_time = None
+    fb_result = None
+
+    # Parse scheduled time if provided
+    if scheduled_time_str:
+        try:
+            scheduled_time = datetime.fromisoformat(scheduled_time_str)
+        except ValueError:
+            try:
+                scheduled_time = datetime.strptime(scheduled_time_str, "%Y-%m-%d %H:%M")
+            except ValueError:
+                return jsonify({"error": "Invalid scheduled_time format. Use ISO or 'YYYY-MM-DD HH:MM'."}), 400
 
     post = Post(
         title=title,
@@ -209,19 +224,32 @@ def upload_manual_post():
         full_description=summary,
         image=img_path,
         hashtags=",".join(hashtags),
-        status="approved" if post_now else "draft",
+        status="approved" if (post_now or scheduled_time) else "draft",
     )
     db.session.add(post)
     db.session.commit()
 
-    fb_result = None
-    if post_now:
+    # If scheduled_time provided → schedule via Facebook API directly
+    if scheduled_time:
+        fb_result = post_to_facebook_scheduled(
+            title=post.title,
+            summary=post.summary,
+            hashtags=hashtags,
+            image_path=post.image,
+            scheduled_time=scheduled_time
+        )
+        post.status = "scheduled"
+        db.session.commit()
+
+    elif post_now:
         fb_result = post_to_facebook(
             title=post.title,
             summary=post.summary,
             hashtags=hashtags,
             image_path=post.image
         )
+        post.status = "published"
+        db.session.commit()
 
     return jsonify({
         "status": "success",
