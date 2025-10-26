@@ -1,1 +1,2 @@
-export const API_BASE_URL = "http://localhost:5000";
+export const API_BASE_URL =
+  "https://footballposter-production-67cc.up.railway.app";
