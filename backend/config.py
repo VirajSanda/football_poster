@@ -1,7 +1,13 @@
-# Load from environment variables for security
+import os
+
 class Config:
-    FACEBOOK_PAGE_ID = "771893249345631"
-    FACEBOOK_ACCESS_TOKEN = "EAAUvS3oj7H4BPq5PWrBqfT83I0IHLZCyWgjP58FzhDwrm32owSFijlaeIYucflgN0lcg3osIc8MZBtQnLTJI31SIZAtG07PZCxqDGOpROiZBG8NjE1Eh5OXURoWS5TyQBz8mxa23daV1tqJTZBAZCqUZBTyPH0RTBOVIOyGtO0ldwvseUk0a3du4uvOYr9s1lVxf7SPiSgJd"
-    API_BASE_URL="https://footballposter-production-67cc.up.railway.app"
-    TELEGRAM_BOT_TOKEN="8453086819:AAFP43KUZaJCwyH-dBCRSA3mbKg_i26-Fns"
-    ALLOWED_CHANNELS = [-1001234567890,-1009876543210]  # Example channel IDs]
+    FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
+    FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
+    API_BASE_URL = os.getenv("API_BASE_URL")
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+    # Your collector channel (or multiple ones)
+    ALLOWED_CHANNELS = [
+        ch.strip()
+        for ch in os.getenv("ALLOWED_CHANNELS", "").split(",")
+        if ch.strip()
+    ]
