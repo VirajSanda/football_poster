@@ -16,7 +16,8 @@ from football_birthdays import get_week_birthdays
 from birthday_image import generate_birthday_image
 from routes_birthday import birthday_routes  # ✅ Blueprint import
 from telegram_webhook import telegram_bp
-
+from dotenv import load_dotenv
+load_dotenv()
 # ---------------- App Setup ---------------- #
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
