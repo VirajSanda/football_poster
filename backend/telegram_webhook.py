@@ -1,5 +1,5 @@
 # telegram_webhook.py
-import os
+import os, shutil
 import requests
 from flask import Blueprint, request, jsonify, render_template_string, send_file
 from image_generator import generate_post_image_nocrop
@@ -142,9 +142,16 @@ def cleanup_tmp():
                 skipped.append({"folder": folder, "error": str(e)})
         else:
             skipped.append({"folder": folder, "error": "Not found"})
+    
+    current_dirs = []
+    for root, dirs, files in os.walk(".", topdown=True):
+        for d in dirs:
+            current_dirs.append(os.path.join(root, d))
+        break  # only top level
 
     return jsonify({
         "status": "cleanup_complete",
         "deleted": deleted,
-        "skipped": skipped
+        "skipped": skipped,
+        "current_dirs": current_dirs
     })
