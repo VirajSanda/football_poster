@@ -30,6 +30,7 @@ def telegram_webhook():
     print(f"📥 Received post from {channel_title} ({channel_id})")
 
     # ✅ Filter allowed channels
+    print(f"🔍 Channel ID: '{channel_id}' | Allowed: {ALLOWED_CHANNELS}")
     if ALLOWED_CHANNELS and channel_id not in ALLOWED_CHANNELS:
         print(f"🚫 Ignored message from {channel_title} ({channel_id}) - not in allowed list")
         return jsonify({"status": "ignored_channel"}), 200

@@ -20,9 +20,6 @@ from dotenv import load_dotenv
 
 # ---------------- Load Environment Variables ---------------- #
 load_dotenv()
-print("DEBUG ENV:")
-print("FACEBOOK_PAGE_ID =", os.getenv("FACEBOOK_PAGE_ID"))
-print("FACEBOOK_PAGE_TOKEN =", os.getenv("FACEBOOK_PAGE_TOKEN"))
 # ---------------- App Setup ---------------- #
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
