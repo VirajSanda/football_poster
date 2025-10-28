@@ -122,11 +122,11 @@ def cleanup_tmp():
     Manually cleanup temporary folders to save Railway disk space.
     Deletes known temp folders like downloads/ and static/images/.
     """
-    base_path = "/app"
     folders_to_clean = [
-        os.path.join(base_path, "downloads"),
-        os.path.join(base_path, "static", "images"),
-        os.path.join(base_path, "tmp"),  # optional if you use this
+        os.path.join("downloads"),
+        os.path.join("static", "images"),
+        os.path.join("tmp"),  # optional if you use this
+        os.path.join("static","uploads"),
     ]
 
     deleted = []
