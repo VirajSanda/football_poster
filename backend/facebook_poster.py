@@ -141,3 +141,16 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
 
     return data
 
+def upload_video_to_facebook(video_path, caption):
+    """
+    Upload a local video to Facebook Page.
+    """
+    if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
+        return {"error": "Facebook credentials not configured"}
+
+    url = f"https://graph-video.facebook.com/{FACEBOOK_PAGE_ID}/videos"
+    files = {'source': open(video_path, 'rb')}
+    data = {'access_token': FACEBOOK_ACCESS_TOKEN, 'description': caption}
+
+    response = requests.post(url, files=files, data=data)
+    return response.json()
