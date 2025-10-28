@@ -115,3 +115,36 @@ def telegram_webhook():
     except Exception as e:
         print(f"🔥 Error processing message from {channel_title}: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@telegram_bp.route("/cleanup_tmp", methods=["POST"])
+def cleanup_tmp():
+    """
+    Manually cleanup temporary folders to save Railway disk space.
+    Deletes known temp folders like downloads/ and static/images/.
+    """
+    base_path = "/app"
+    folders_to_clean = [
+        os.path.join(base_path, "downloads"),
+        os.path.join(base_path, "static", "images"),
+        os.path.join(base_path, "tmp"),  # optional if you use this
+    ]
+
+    deleted = []
+    skipped = []
+
+    for folder in folders_to_clean:
+        if os.path.exists(folder):
+            try:
+                shutil.rmtree(folder)
+                os.makedirs(folder, exist_ok=True)  # recreate empty folder
+                deleted.append(folder)
+            except Exception as e:
+                skipped.append({"folder": folder, "error": str(e)})
+        else:
+            skipped.append({"folder": folder, "error": "Not found"})
+
+    return jsonify({
+        "status": "cleanup_complete",
+        "deleted": deleted,
+        "skipped": skipped
+    })
