@@ -8,3 +8,4 @@ schedule==1.2.2
 feedparser==6.0.12
 beautifulsoup4==4.13.3
 python-dotenv
+traceback

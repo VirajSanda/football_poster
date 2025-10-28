@@ -6,6 +6,7 @@ from image_generator import generate_post_image_nocrop
 from facebook_poster import upload_to_facebook
 from config import Config
 from models import db, TelePost
+import traceback
 
 telegram_bp = Blueprint("telegram", __name__)
 
@@ -77,6 +78,8 @@ def telegram_webhook():
         print(f"✅ Posted from {channel_title} ({channel_id}) to Facebook.")
         return jsonify({"status": "ok", "facebook_result": fb_result}), 200
 
-    except Exception as e:
+     except Exception as e:
+        print("🔥 Full error traceback:")
+        traceback.print_exc()
         print(f"🔥 Error processing message from {channel_title}: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
