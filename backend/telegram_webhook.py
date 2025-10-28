@@ -18,76 +18,100 @@ ALLOWED_CHANNELS = Config.ALLOWED_CHANNELS
 @telegram_bp.route("/telegram_webhook", methods=["POST"])
 def telegram_webhook():
     data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid payload"}), 400
+    msg = data.get("message") or data.get("channel_post")
+    if not msg:
+        return jsonify({"status": "ignored"}), 200
 
-    message = data.get("message") or data.get("channel_post")
-    if not message:
-        return jsonify({"error": "No message"}), 200
+    chat_info = msg.get("chat", {})
+    channel_id = str(chat_info.get("id", ""))
+    channel_title = chat_info.get("title", "Unknown Channel")
 
-    chat = message.get("chat", {})
-    channel_id = str(chat.get("id"))
-    channel_title = chat.get("title", "Unknown")
+    print(f"📥 Received post from {channel_title} ({channel_id})")
 
+    # ✅ Allow only whitelisted channels
     if ALLOWED_CHANNELS and channel_id not in ALLOWED_CHANNELS:
         print(f"🚫 Ignored message from {channel_title} ({channel_id}) - not in allowed list")
-        return jsonify({"ignored": True}), 200
+        return jsonify({"status": "ignored_channel"}), 200
 
-    caption = message.get("caption", "").strip()
-    photo = message.get("photo")
-    video = message.get("video")
+    caption = msg.get("caption", msg.get("text", "") or "").strip()
+    photos = msg.get("photo", [])
+    video = msg.get("video")
 
-    # --- Duplicate guard (check by caption + channel_id) --- #
-    existing = (
-        TelePost.query.filter_by(channel_id=channel_id, caption=caption)
-        .order_by(TelePost.created_at.desc())
-        .first()
-    )
+    # ✅ Duplicate guard (same caption & channel)
+    existing = TelePost.query.filter_by(channel_id=channel_id, caption=caption).first()
     if existing:
-        print(f"⚠️ Duplicate detected: same caption already processed from {channel_title}")
-        return jsonify({"duplicate": True}), 200
+        print(f"⚠️ Duplicate detected: already posted '{caption[:40]}...' from {channel_title}")
+        return jsonify({"status": "duplicate_skipped"}), 200
 
-    local_image = None
+    try:
+        # Handle PHOTO post
+        if photos:
+            file_id = photos[-1]["file_id"]
+            file_info = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}").json()
+            file_path = file_info["result"]["file_path"]
+            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
 
-    # --- Handle photos --- #
-    if photo:
-        file_id = photo[-1]["file_id"]
-        file_path_resp = requests.get(
-            f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/getFile?file_id={file_id}"
-        )
-        file_path = file_path_resp.json()["result"]["file_path"]
-        img_url = f"https://api.telegram.org/file/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/{file_path}"
-        local_image = generate_post_image_nocrop(title=caption or "Kick Off Zone", image_url=img_url, article_url="")
+            # Download image
+            local_image = f"/tmp/{os.path.basename(file_path)}"
+            with open(local_image, "wb") as f:
+                f.write(requests.get(file_url).content)
 
-    # --- Handle videos (optional future) --- #
-    local_video = None
-    if video:
-        file_id = video["file_id"]
-        file_path_resp = requests.get(
-            f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/getFile?file_id={file_id}"
-        )
-        file_path = file_path_resp.json()["result"]["file_path"]
-        local_video = f"https://api.telegram.org/file/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/{file_path}"
-        print(f"🎥 Video detected: {local_video}")
+            branded_image = generate_post_image_nocrop(
+                title=caption,
+                image_url=local_image,
+                article_url=""
+            )
 
-    # --- Save post in DB --- #
-    post = TelePost(
-        channel_id=channel_id,
-        channel_title=channel_title,
-        caption=caption,
-        image_path=local_image or local_video,
-        status="pending",
-        created_at=datetime.utcnow(),
-    )
-    db.session.add(post)
-    db.session.commit()
+            fb_caption = f"{caption}\n\n📢 From {channel_title}"
+            fb_result = upload_to_facebook(branded_image, fb_caption)
 
-    print(f"✅ Saved Telegram post from {channel_title} ({channel_id})")
+            new_post = TelePost(
+                channel_id=channel_id,
+                channel_title=channel_title,
+                caption=caption,
+                image_path=branded_image,
+                status="posted",
+                created_at=datetime.utcnow()
+            )
+            db.session.add(new_post)
+            db.session.commit()
 
-    # --- Optional: Auto-upload to Facebook if you want --- #
-    if local_video:
-        upload_video_to_facebook(local_video, caption)
-    elif local_image:
-        upload_to_facebook(local_image, caption)
+            print(f"✅ Image post uploaded for {channel_title}")
+            return jsonify({"status": "ok", "facebook_result": fb_result}), 200
 
-    return jsonify({"ok": True}), 200
+        # Handle VIDEO post
+        elif video:
+            file_id = video["file_id"]
+            file_info = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}").json()
+            file_path = file_info["result"]["file_path"]
+            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+
+            # ✅ Download video locally
+            local_video = f"/tmp/{os.path.basename(file_path)}"
+            with open(local_video, "wb") as f:
+                f.write(requests.get(file_url).content)
+
+            fb_caption = f"{caption}\n\n📢 From {channel_title}"
+            fb_result = upload_video_to_facebook(local_video, fb_caption)
+
+            new_post = TelePost(
+                channel_id=channel_id,
+                channel_title=channel_title,
+                caption=caption,
+                image_path=local_video,
+                status="posted",
+                created_at=datetime.utcnow()
+            )
+            db.session.add(new_post)
+            db.session.commit()
+
+            print(f"✅ Video post uploaded for {channel_title}")
+            return jsonify({"status": "ok", "facebook_result": fb_result}), 200
+
+        else:
+            print(f"⚠️ No media found from {channel_title}")
+            return jsonify({"status": "no_media"}), 200
+
+    except Exception as e:
+        print(f"🔥 Error processing message from {channel_title}: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
