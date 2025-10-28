@@ -65,8 +65,9 @@ def telegram_webhook():
 
         # ✅ Generate your branded image
         branded_image = generate_post_image_nocrop(
-            title=caption,
-            image_path=local_image
+            caption,
+            local_image,
+            ""
         )
 
         # ✅ Add Telegram channel tag to caption
