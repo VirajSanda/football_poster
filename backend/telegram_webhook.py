@@ -78,7 +78,7 @@ def telegram_webhook():
         print(f"✅ Posted from {channel_title} ({channel_id}) to Facebook.")
         return jsonify({"status": "ok", "facebook_result": fb_result}), 200
 
-     except Exception as e:
+    except Exception as e:
         print("🔥 Full error traceback:")
         traceback.print_exc()
         print(f"🔥 Error processing message from {channel_title}: {e}")
