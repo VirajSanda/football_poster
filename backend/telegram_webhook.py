@@ -17,53 +17,65 @@ ALLOWED_CHANNELS = Config.ALLOWED_CHANNELS
 def telegram_webhook():
     data = request.get_json()
 
-    if not data or "message" not in data:
+    # ✅ Telegram sends "channel_post" for channels
+    msg = data.get("message") or data.get("channel_post")
+    if not msg:
+        print("⚠️ No message or channel_post in update.")
         return jsonify({"status": "ignored"}), 200
 
-    msg = data["message"]
     chat_info = msg.get("chat", {})
     channel_id = str(chat_info.get("id", ""))
     channel_title = chat_info.get("title", "Unknown Channel")
 
-    # ✅ Filter only allowed channels (your collector or list of channels)
+    print(f"📥 Received post from {channel_title} ({channel_id})")
+
+    # ✅ Filter allowed channels
     if ALLOWED_CHANNELS and channel_id not in ALLOWED_CHANNELS:
-        print(f"Ignored message from {channel_title} ({channel_id})")
+        print(f"🚫 Ignored message from {channel_title} ({channel_id}) - not in allowed list")
         return jsonify({"status": "ignored_channel"}), 200
 
-    caption = msg.get("caption", "")
+    caption = msg.get("caption", msg.get("text", "") or "").strip()
     photos = msg.get("photo", [])
 
     if not photos:
+        print(f"⚠️ No photo found in message from {channel_title}")
         return jsonify({"status": "no_photo"}), 200
 
-    # Get highest-resolution photo
-    file_id = photos[-1]["file_id"]
-    file_info = requests.get(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
-    ).json()
+    try:
+        # ✅ Get highest resolution photo
+        file_id = photos[-1]["file_id"]
+        file_info = requests.get(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+        ).json()
 
-    if "result" not in file_info:
-        return jsonify({"status": "file_error"}), 200
+        if "result" not in file_info:
+            print("❌ Telegram file info missing 'result'")
+            return jsonify({"status": "file_error"}), 200
 
-    file_path = file_info["result"]["file_path"]
-    file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+        file_path = file_info["result"]["file_path"]
+        file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
 
-    # Download image locally
-    local_image = f"/tmp/{file_path.split('/')[-1]}"
-    with open(local_image, "wb") as f:
-        f.write(requests.get(file_url).content)
+        # ✅ Download image
+        local_image = f"/tmp/{file_path.split('/')[-1]}"
+        response = requests.get(file_url)
+        with open(local_image, "wb") as f:
+            f.write(response.content)
 
-    # 🖼️ Generate your branded image (small title area)
-    branded_image = generate_post_image_nocrop(
-        title=caption,
-        image_path=local_image
-    )
+        # ✅ Generate your branded image
+        branded_image = generate_post_image_nocrop(
+            title=caption,
+            image_path=local_image
+        )
 
-    # 🏷️ Add Telegram channel name tag to Facebook caption
-    fb_caption = f"{caption}\n\n📢 From {channel_title}"
+        # ✅ Add Telegram channel tag to caption
+        fb_caption = f"{caption}\n\n📢 From {channel_title}"
 
-    # 🚀 Post directly to Facebook
-    fb_result = upload_to_facebook(branded_image, fb_caption)
+        # ✅ Upload to Facebook
+        fb_result = upload_to_facebook(branded_image, fb_caption)
 
-    print(f"Posted from {channel_title} ({channel_id}) to Facebook.")
-    return jsonify({"status": "ok", "facebook_result": fb_result}), 200
+        print(f"✅ Posted from {channel_title} ({channel_id}) to Facebook.")
+        return jsonify({"status": "ok", "facebook_result": fb_result}), 200
+
+    except Exception as e:
+        print(f"🔥 Error processing message from {channel_title}: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
