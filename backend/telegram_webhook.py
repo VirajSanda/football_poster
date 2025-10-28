@@ -3,10 +3,11 @@ import os
 import requests
 from flask import Blueprint, request, jsonify, render_template_string, send_file
 from image_generator import generate_post_image_nocrop
-from facebook_poster import upload_to_facebook
+from facebook_poster import upload_to_facebook, upload_video_to_facebook
 from config import Config
 from models import db, TelePost
 import traceback
+from datetime import datetime
 
 telegram_bp = Blueprint("telegram", __name__)
 
