@@ -3,17 +3,20 @@ import os
 import json
 from config import Config
 from datetime import datetime, timedelta, timezone
+# For backward compatibility if needed
+FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID or os.getenv("FACEBOOK_PAGE_ID")
+FACEBOOK_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN or os.getenv("FACEBOOK_ACCESS_TOKEN")
 
 def upload_to_facebook(image_path, caption):
     """
     Upload a local image to Facebook Page.
     """
-    if not Config.FACEBOOK_PAGE_ID or not Config.FACEBOOK_ACCESS_TOKEN:
+    if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
         return {"error": "Facebook credentials not configured"}
 
-    url = f"https://graph.facebook.com/{Config.FACEBOOK_PAGE_ID}/photos"
+    url = f"https://graph.facebook.com/{FACEBOOK_PAGE_ID}/photos"
     files = {'source': open(image_path, 'rb')}
-    data = {'caption': caption, 'access_token': Config.FACEBOOK_ACCESS_TOKEN}
+    data = {'caption': caption, 'access_token': FACEBOOK_ACCESS_TOKEN}
 
     try:
         response = requests.post(url, files=files, data=data)
@@ -50,7 +53,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
     Auto-adjusts time if too early (<10 min).
     """
 
-    if not Config.FACEBOOK_PAGE_ID or not Config.FACEBOOK_ACCESS_TOKEN:
+    if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
         return {"error": "Facebook credentials not configured"}
 
     # Combine message
@@ -80,10 +83,10 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
             return {"error": f"Invalid scheduled_time: {str(e)}"}
 
     # Prepare payload
-    url = f"https://graph.facebook.com/v19.0/{Config.FACEBOOK_PAGE_ID}/feed"
+    url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/feed"
     payload = {
         "message": message,
-        "access_token": Config.FACEBOOK_ACCESS_TOKEN,
+        "access_token": FACEBOOK_ACCESS_TOKEN,
     }
 
     # Include optional link
@@ -99,7 +102,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
 
     # If there's an image, upload it first as unpublished and attach it
     if image_path and os.path.exists(image_path):
-        photo_url = f"https://graph.facebook.com/v19.0/{Config.FACEBOOK_PAGE_ID}/photos"
+        photo_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/photos"
 
         with open(image_path, "rb") as img:
             files = {"source": img}
@@ -107,7 +110,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
                 photo_url,
                 params={
                     "published": "false",
-                    "access_token": Config.FACEBOOK_ACCESS_TOKEN,
+                    "access_token": FACEBOOK_ACCESS_TOKEN,
                 },
                 files=files,
             )
