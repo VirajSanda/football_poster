@@ -66,13 +66,6 @@ def get_main_image(article_url):
         print("[ERROR] get_main_image:", e)
     return None
 
-
-def get_image_brightness(img):
-    """Estimate brightness of an image to choose text color dynamically."""
-    stat = ImageStat.Stat(img.convert("L"))
-    return stat.mean[0]
-
-
 def wrap_text(draw, text, font, max_width):
     """Wrap text into lines that fit the given width."""
     words = text.split()
@@ -88,7 +81,7 @@ def wrap_text(draw, text, font, max_width):
         lines.append(line)
     return lines
 
-
+# ---------------- Main Image Generation ---------------- #
 def add_bottom_banner(img, title_text):
     """Draw a semi-transparent bottom gradient banner with sporty multi-line title."""
     W, H = img.size
@@ -96,16 +89,9 @@ def add_bottom_banner(img, title_text):
     banner = Image.new("RGBA", (W, banner_h))
 
     # Random team-color gradient
-    team1, team2 = random.choice(TEAM_COLORS)
     for y in range(banner_h):
-        fade = y / banner_h
-        for x in range(W):
-            t = x / W
-            r = int(team1[0] * (1 - t) + team2[0] * t)
-            g = int(team1[1] * (1 - t) + team2[1] * t)
-            b = int(team1[2] * (1 - t) + team2[2] * t)
-            alpha = int(40 + 200 * (fade ** 1.5))
-            banner.putpixel((x, y), (r, g, b, alpha))
+    for x in range(W):
+        banner.putpixel((x, y), (0, 0, 0, 180))
 
     img.paste(banner, (0, H - banner_h), banner)
 
@@ -121,8 +107,7 @@ def add_bottom_banner(img, title_text):
     total_h = len(lines) * (font_size + 6)
     y = H - banner_h + (banner_h - total_h) // 2 + 5
 
-    brightness = get_image_brightness(img)
-    text_color = (255, 255, 255, 255) if brightness < 140 else (10, 10, 10, 255)
+    text_color = (255, 215, 0, 255)
 
     for line in lines:
         tw = draw.textlength(line, font=font)
@@ -132,7 +117,6 @@ def add_bottom_banner(img, title_text):
         y += font_size + 4
 
     return img
-
 
 def download_and_rebrand(img_url, article_url, title="Kick Off Zone"):
     """Download, resize, and brand image for Facebook posts."""
@@ -224,16 +208,9 @@ def download_and_rebrand_nocrop(img_url, article_url, title="Kick Off Zone"):
         banner = Image.new("RGBA", (W, banner_h))
 
         # Random team-color gradient (soft fade up)
-        team1, team2 = random.choice(TEAM_COLORS)
         for y in range(banner_h):
-            fade = y / banner_h
-            for x in range(W):
-                t = x / W
-                r = int(team1[0] * (1 - t) + team2[0] * t)
-                g = int(team1[1] * (1 - t) + team2[1] * t)
-                b = int(team1[2] * (1 - t) + team2[2] * t)
-                alpha = int(40 + 200 * (fade ** 1.5))
-                banner.putpixel((x, y), (r, g, b, alpha))
+        for x in range(W):
+            banner.putpixel((x, y), (0, 0, 0, 180))
 
         img.paste(banner, (0, H - banner_h), banner)
 
@@ -250,8 +227,7 @@ def download_and_rebrand_nocrop(img_url, article_url, title="Kick Off Zone"):
         total_h = len(lines) * (font_size + 6)
         y = H - banner_h + (banner_h - total_h) // 2 + 5
 
-        brightness = get_image_brightness(img)
-        text_color = (255, 255, 255, 255) if brightness < 140 else (10, 10, 10, 255)
+        text_color = (255, 215, 0, 255)
 
         for line in lines:
             tw = draw.textlength(line, font=font)
@@ -306,8 +282,3 @@ def generate_hashtags(title, summary=""):
             hashtags.append(f"#{clean.capitalize()}")
     hashtags = list(dict.fromkeys(hashtags))
     return hashtags[:6]
-
-
-def is_valid_url(url: str) -> bool:
-    """Check if a string looks like a valid http(s) URL."""
-    return bool(re.match(r"^https?://", str(url or "").strip()))
