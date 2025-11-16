@@ -211,8 +211,8 @@ def download_and_rebrand_nocrop(img_url, article_url, title="Kick Off Zone"):
 
         # Random team-color gradient (soft fade up)
         for y in range(banner_h):
-        for x in range(W):
-            banner.putpixel((x, y), (0, 0, 0, 180))
+            for x in range(W):
+                banner.putpixel((x, y), (0, 0, 0, 180))
 
         img.paste(banner, (0, H - banner_h), banner)
 
