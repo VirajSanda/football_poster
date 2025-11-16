@@ -83,22 +83,18 @@ def wrap_text(draw, text, font, max_width):
 
 # ---------------- Main Image Generation ---------------- #
 def add_bottom_banner(img, title_text):
-    """Draw a semi-transparent bottom gradient banner with sporty multi-line title."""
     W, H = img.size
-    banner_h = int(H * 0.25)  # compact height
-    banner = Image.new("RGBA", (W, banner_h))
+    banner_h = int(H * 0.25)
 
-    # Random team-color gradient
-    for y in range(banner_h):
-    for x in range(W):
-        banner.putpixel((x, y), (0, 0, 0, 180))
-
+    # Black background underlay
+    banner = Image.new("RGBA", (W, banner_h), (0, 0, 0, 180))
     img.paste(banner, (0, H - banner_h), banner)
 
     draw = ImageDraw.Draw(img)
     font_size = TITLE_FONT_SIZE
     font = load_sport_font(font_size)
     lines = wrap_text(draw, title_text, font, W - 100)
+
     while len(lines) > 2 and font_size > 24:
         font_size = int(font_size * 0.9)
         font = load_sport_font(font_size)
@@ -107,13 +103,19 @@ def add_bottom_banner(img, title_text):
     total_h = len(lines) * (font_size + 6)
     y = H - banner_h + (banner_h - total_h) // 2 + 5
 
+    # Gold text color
     text_color = (255, 215, 0, 255)
 
     for line in lines:
         tw = draw.textlength(line, font=font)
         x = (W - tw) // 2
+
+        # Shadow
         draw.text((x + 3, y + 3), line, font=font, fill=(0, 0, 0, 160))
+
+        # Gold text
         draw.text((x, y), line, font=font, fill=text_color)
+
         y += font_size + 4
 
     return img
