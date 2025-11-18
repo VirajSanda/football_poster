@@ -8,3 +8,5 @@ schedule==1.2.2
 feedparser==6.0.12
 beautifulsoup4==4.13.3
 python-dotenv
+pytest==7.4.2
+pytest-mock==3.11.4
