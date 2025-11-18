@@ -43,7 +43,7 @@ jobs:
           path: backend/coverage.xml
 
       - name: Upload backend coverage to Codecov
-        if: steps.check_backend_cov.outputs.found == 'true' && secrets.CODECOV_TOKEN != ''
+        if: ${{ steps.check_backend_cov.outputs.found == 'true' }}
         uses: codecov/codecov-action@v4
         with:
           files: backend/coverage.xml
@@ -88,7 +88,7 @@ jobs:
           path: frontend/coverage/lcov.info
 
       - name: Upload frontend coverage to Codecov
-        if: steps.check_frontend_cov.outputs.found == 'true' && secrets.CODECOV_TOKEN != ''
+        if: ${{ steps.check_frontend_cov.outputs.found == 'true' }}
         uses: codecov/codecov-action@v4
         with:
           files: frontend/coverage/lcov.info
