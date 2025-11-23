@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 
 # Local imports
@@ -44,9 +44,7 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
-
 # ---------------- Helpers ---------------- #
-
 def get_main_image(article_url: str):
     """Try to extract a main image from an article page."""
     try:
@@ -66,19 +64,32 @@ def get_main_image(article_url: str):
     except Exception as e:
         print("[ERROR] get_main_image:", e)
     return None
-
-
 # ---------------- Routes ---------------- #
 
 @app.route("/posts", methods=["GET"])
 def get_posts():
     status = request.args.get("status")
-    query = Post.query
-    if status in ["draft", "approved", "published", "rejected"]:
-        query = query.filter_by(status=status)
+
+    # By default, show posts fetched within the last 24 hours and not rejected.
+    cutoff = datetime.utcnow() - timedelta(days=1)
+
+    # If an explicit status is requested, respect it. For non-rejected
+    # statuses, only return items newer than the cutoff. If the caller asks
+    # for 'rejected' explicitly, return rejected posts regardless of age.
+    if status:
+        if status == "rejected":
+            query = Post.query.filter_by(status="rejected")
+        elif status in ["draft", "approved", "published"]:
+            query = Post.query.filter_by(status=status).filter(Post.created_at >= cutoff)
+        else:
+            # unknown status -> return empty
+            return jsonify([])
+    else:
+        # no explicit status -> return all non-rejected posts within 24h
+        query = Post.query.filter(Post.status != "rejected").filter(Post.created_at >= cutoff)
+
     posts = query.order_by(Post.created_at.desc()).all()
     return jsonify([p.serialize() for p in posts])
-
 
 @app.route("/posts", methods=["POST"])
 def create_post():
@@ -114,7 +125,6 @@ def create_post():
 
     return jsonify(post.serialize()), 201
 
-
 @app.route("/approve/<int:post_id>", methods=["POST"])
 def approve_post(post_id):
     try:
@@ -141,7 +151,6 @@ def approve_post(post_id):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @app.route("/reject/<int:post_id>", methods=["POST"])
 def reject_post(post_id):
     try:
@@ -155,14 +164,12 @@ def reject_post(post_id):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 @app.route("/posts/<int:post_id>/publish", methods=["POST"])
 def publish_post(post_id):
     post = Post.query.get_or_404(post_id)
     post.status = "published"
     db.session.commit()
     return jsonify(post.serialize())
-
 
 @app.route("/fetch_news", methods=["POST"])
 def fetch_news():
@@ -199,7 +206,6 @@ def fetch_news():
 
     db.session.commit()
     return jsonify([p.serialize() for p in new_posts])
-
 
 @app.route("/upload_manual_post", methods=["POST"])
 def upload_manual_post():
@@ -279,14 +285,12 @@ def upload_manual_post():
         "facebook": fb_result
     })
 
-
 # ✅ Unified static serving (works for all /static/* paths)
 @app.route("/static/<path:filename>")
 def serve_static(filename):
     """Serve any file inside the /static directory."""
     static_dir = os.path.join(BASE_DIR, "static")
     return send_from_directory(static_dir, filename)
-
 
 @app.route("/delete_post/<int:post_id>", methods=["DELETE"])
 def delete_post(post_id):
@@ -308,7 +312,6 @@ def delete_post(post_id):
         return jsonify({"status": "success", "message": f"Post {post_id} deleted"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 # ---------------- Upload Endpoint ---------------- #
 @app.route("/upload_video", methods=["POST"])
