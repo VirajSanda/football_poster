@@ -84,24 +84,35 @@ def telegram_webhook():
         # Handle VIDEO post
         elif video:
             file_id = video["file_id"]
-            file_info = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}").json()
+            file_info = requests.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+            ).json()
             file_path = file_info["result"]["file_path"]
             file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
 
-            # ✅ Download video locally
+            # 🔽 Download once (streaming, safe for large files)
             local_video = f"/tmp/{os.path.basename(file_path)}"
-            with open(local_video, "wb") as f:
-                f.write(requests.get(file_url).content)
+            with requests.get(file_url, stream=True) as r:
+                r.raise_for_status()
+                with open(local_video, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+
+            print("📦 Video size:", os.path.getsize(local_video), flush=True)
 
             fb_caption = f"{caption}\n\n📢 From {channel_title}"
+
+            # ⚡ Upload to Facebook
             fb_result = upload_video_to_facebook(local_video, fb_caption)
 
-            # ⚡ Upload to YouTube
-            print("🎥 Starting YouTube upload...")
+            # 🎥 Upload to YouTube
+            print("🎥 Starting YouTube upload...", flush=True)
             with open(local_video, "rb") as f:
                 yt_response = upload_video_stream(f, os.path.basename(local_video))
-                yt_video_id = yt_response.get("id")
-            print(f"🎥 YouTube upload response:", yt_response)
+            print("🎥 YouTube upload response:", yt_response, flush=True)
+
+            yt_video_id = yt_response.get("id")
 
             new_post = TelePost(
                 channel_id=channel_id,
@@ -115,7 +126,11 @@ def telegram_webhook():
             db.session.commit()
 
             print(f"✅ Video post uploaded for {channel_title}")
-            return jsonify({"status": "ok", "facebook_result": fb_result,"youtube_video_id": yt_video_id}), 200
+            return jsonify({
+                "status": "ok",
+                "facebook_result": fb_result,
+                "youtube_video_id": yt_video_id
+            }), 200
 
         else:
             print(f"⚠️ No media found from {channel_title}")
