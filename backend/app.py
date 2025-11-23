@@ -9,7 +9,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 
 # Local imports
-from models import db, Post
+from models import db, Post, VideoUploadLog
 from image_generator import generate_post_image, generate_hashtags, PLACEHOLDER_PATH, generate_post_image_nocrop
 from facebook_poster import post_to_facebook, post_to_facebook_scheduled
 from football_birthdays import get_week_birthdays
@@ -17,6 +17,7 @@ from birthday_image import generate_birthday_image
 from routes_birthday import birthday_routes  # ✅ Blueprint import
 from telegram_webhook import telegram_bp
 from dotenv import load_dotenv
+from youtube_upload import upload_video_stream 
 
 # ---------------- Load Environment Variables ---------------- #
 load_dotenv()
@@ -308,6 +309,31 @@ def delete_post(post_id):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
+# ---------------- Upload Endpoint ---------------- #
+@app.route("/upload_video", methods=["POST"])
+def upload_video():
+    """Upload a video from React UI."""
+    if "file" not in request.files:
+        return jsonify({"error": "Missing file"}), 400
+
+    file = request.files["file"]
+
+    try:
+        yt_video_id = upload_video_stream(file.stream, file.filename)
+
+        log = VideoUploadLog(
+            source="ui",
+            original_filename=file.filename,
+            youtube_video_id=yt_video_id["id"]
+        )
+        db.session.add(log)
+        db.session.commit()
+
+        return jsonify({"ok": True, "youtube_id": yt_video_id})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 # ---------------- Main ---------------- #
 if __name__ == "__main__":

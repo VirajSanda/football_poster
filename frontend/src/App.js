@@ -40,6 +40,8 @@ function App() {
         return <PostsPage />;
       case "upload":
         return <ManualUpload />;
+      case "videos":
+        return <VideoUploadPage />;
       case "birthdays":
         return <BirthdayGenerator />;
       default:
@@ -71,6 +73,7 @@ function App() {
           {[
             { id: "posts", label: "Posts", icon: "📰" },
             { id: "upload", label: "Manual Upload", icon: "📤" },
+            { id: "videos", label: "Video Upload", icon: "🎥" },
             { id: "birthdays", label: "Birthdays", icon: "🎂" },
           ].map((tab) => (
             <button
@@ -103,6 +106,7 @@ function App() {
           <h2 className="text-lg font-semibold text-gray-800 truncate md:text-xl">
             {activeTab === "posts" && "All Posts"}
             {activeTab === "upload" && "Manual Upload"}
+            {activeTab === "videos" && "Video Upload"}
             {activeTab === "birthdays" && "Birthday Generator"}
           </h2>
           <div className="w-8 md:w-auto"></div> {/* Spacer for balance */}
@@ -839,6 +843,86 @@ function BirthdayGenerator() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+//
+// ---------- 4️⃣ YouTube Video Upload Page ----------
+//
+function VideoUploadPage() {
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleUpload = async () => {
+    if (!file) {
+      setResult({ ok: false, error: "Please select a video file first." });
+      return;
+    }
+
+    setUploading(true);
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`${API_BASE_URL}/upload_video`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      setResult(data);
+    } catch (err) {
+      setResult({ ok: false, error: err.message });
+    }
+
+    setUploading(false);
+  };
+
+  return (
+    <div className="max-w-xl mx-auto bg-white shadow-md p-6 rounded-lg">
+      <h3 className="text-xl font-semibold mb-4">Upload Video to YouTube</h3>
+
+      {/* File Picker */}
+      <input
+        type="file"
+        accept="video/*"
+        onChange={(e) => setFile(e.target.files[0])}
+        className="w-full border p-2 rounded mb-4"
+      />
+
+      {/* Upload Button */}
+      <button
+        onClick={handleUpload}
+        disabled={uploading}
+        className={`w-full py-3 rounded text-white font-medium ${
+          uploading ? "bg-gray-500" : "bg-blue-600 hover:bg-blue-700"
+        }`}
+      >
+        {uploading ? "Uploading..." : "Upload Video"}
+      </button>
+
+      {/* Result Message */}
+      {result && (
+        <div
+          className={`mt-4 p-3 rounded ${
+            result.ok
+              ? "bg-green-100 text-green-800"
+              : "bg-red-100 text-red-800"
+          }`}
+        >
+          {result.ok ? (
+            <div>
+              ✅ Uploaded Successfully! <br />
+            </div>
+          ) : (
+            <>❌ {result.error}</>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -51,3 +51,25 @@ class TelePost(db.Model):
             "status": self.status,
             "created_at": self.created_at.isoformat(),
         }
+
+class VideoUploadLog(db.Model):
+    __tablename__ = "video_upload_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(50))
+    original_filename = db.Column(db.String(500))
+    youtube_video_id = db.Column(db.String(50))
+    error = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "source": self.source,
+            "original_filename": self.original_filename,
+            "youtube_video_id": self.youtube_video_id,
+            "error": self.error,
+            "created_at": self.created_at.isoformat(),
+        }
+
+        
