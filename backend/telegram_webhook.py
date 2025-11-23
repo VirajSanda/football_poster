@@ -94,12 +94,14 @@ def telegram_webhook():
                 f.write(requests.get(file_url).content)
 
             fb_caption = f"{caption}\n\n📢 From {channel_title}"
-            fb_result = "1" # upload_video_to_facebook(local_video, fb_caption)
+            fb_result = upload_video_to_facebook(local_video, fb_caption)
 
             # ⚡ Upload to YouTube
+            print("🎥 Starting YouTube upload...")
             with open(local_video, "rb") as f:
                 yt_response = upload_video_stream(f, os.path.basename(local_video))
                 yt_video_id = yt_response.get("id")
+            print(f"🎥 YouTube upload response:", yt_response)
 
             new_post = TelePost(
                 channel_id=channel_id,
