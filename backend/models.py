@@ -40,6 +40,8 @@ class TelePost(db.Model):
     image_path = db.Column(db.String(500))
     status = db.Column(db.String(20), default="pending")  # pending, approved, rejected, posted
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    youtube_video_id = db.Column(db.String(100), nullable=True)
+    youtube_raw = db.Column(db.Text, nullable=True)
 
     def serialize(self):
         return {

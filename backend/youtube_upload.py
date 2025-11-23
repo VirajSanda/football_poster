@@ -5,6 +5,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from googleapiclient.errors import HttpError
 
 from config import Config
 
@@ -53,13 +54,21 @@ def get_youtube_client():
         client_secret=os.getenv("YOUTUBE_CLIENT_SECRET") or Config.YOUTUBE_CLIENT_SECRET,
     )
 
-    creds.refresh(Request())
+    try:
+        creds.refresh(Request())
+    except Exception as e:
+        # Provide a clearer error message for calling code / logs
+        raise RuntimeError(f"Failed to refresh YouTube credentials: {e}") from e
 
-    youtube = build(
-        "youtube", "v3",
-        credentials=creds,
-        cache_discovery=False
-    )
+    try:
+        youtube = build(
+            "youtube", "v3",
+            credentials=creds,
+            cache_discovery=False
+        )
+    except Exception as e:
+        raise RuntimeError(f"Failed to build YouTube client: {e}") from e
+
     return youtube
 
 
@@ -95,10 +104,24 @@ def upload_video_stream(file_stream, filename: str):
     )
 
     response = None
-    while response is None:
-        _status, response = request.next_chunk()
+    try:
+        while response is None:
+            _status, response = request.next_chunk()
+    except HttpError as he:
+        # Bubble up a readable error
+        content = None
+        try:
+            content = he.content.decode() if hasattr(he, "content") else str(he)
+        except Exception:
+            content = str(he)
+        raise RuntimeError(f"YouTube upload failed: {content}") from he
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error during upload: {e}") from e
 
-    return {"id": response.get("id")}
+    if not response or not isinstance(response, dict):
+        raise RuntimeError("Upload finished but response missing or invalid")
+
+    return {"id": response.get("id"), "raw": response}
 
 
 # --------------------------------------------------------------

@@ -1,6 +1,7 @@
 # telegram_webhook.py
 import os, shutil
 import requests
+import json
 from flask import Blueprint, request, jsonify, render_template_string, send_file
 from image_generator import generate_post_image_nocrop
 from facebook_poster import upload_to_facebook, upload_video_to_facebook
@@ -98,10 +99,20 @@ def telegram_webhook():
 
             # ⚡ Upload to YouTube
             print("🎥 Starting YouTube upload...")
-            with open(local_video, "rb") as f:
-                yt_response = upload_video_stream(f, os.path.basename(local_video))
-                yt_video_id = yt_response.get("id")
-            print(f"🎥 YouTube upload response:", yt_response)
+            yt_video_id = None
+            yt_response = None
+            try:
+                with open(local_video, "rb") as f:
+                    yt_response = upload_video_stream(f, os.path.basename(local_video))
+                # upload_video_stream now returns dict with 'id' and optional 'raw'
+                if isinstance(yt_response, dict):
+                    yt_video_id = yt_response.get("id")
+                print(f"🎥 YouTube upload response: {yt_response}")
+            except Exception as e:
+                traceback.print_exc()
+                print(f"❌ YouTube upload failed: {e}")
+                # Continue — we still save the TelePost record, but mark that
+                # youtube upload failed by not providing an id in the response.
 
             new_post = TelePost(
                 channel_id=channel_id,
@@ -109,13 +120,20 @@ def telegram_webhook():
                 caption=caption,
                 image_path=local_video,
                 status="posted",
-                created_at=datetime.utcnow()
+                created_at=datetime.utcnow(),
+                youtube_video_id=yt_video_id,
+                youtube_raw=(None if yt_response is None else json.dumps(yt_response))
             )
             db.session.add(new_post)
             db.session.commit()
 
-            print(f"✅ Video post uploaded for {channel_title}")
-            return jsonify({"status": "ok", "facebook_result": fb_result,"youtube_video_id": yt_video_id}), 200
+            print(f"✅ Video post processed for {channel_title}")
+            result = {"status": "ok", "facebook_result": fb_result}
+            if yt_video_id:
+                result["youtube_video_id"] = yt_video_id
+            else:
+                result["youtube_error"] = "upload_failed"
+            return jsonify(result), 200
 
         else:
             print(f"⚠️ No media found from {channel_title}")
@@ -164,3 +182,11 @@ def cleanup_tmp():
         "skipped": skipped,
         "current_dirs": current_dirs
     })
+
+
+@telegram_bp.route("/test_webhook", methods=["POST"])
+def test_webhook():
+    """Simple alias for testing locally — delegates to the main webhook handler.
+    Useful so tests can call `/telegram/test_webhook` to simulate Telegram payloads.
+    """
+    return telegram_webhook()
