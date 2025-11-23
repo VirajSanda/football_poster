@@ -90,8 +90,12 @@ def telegram_webhook():
             file_path = file_info["result"]["file_path"]
             file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
 
-            # 🔽 Download once (streaming, safe for large files)
+            # ----------------------------------------------------------
+            # Download ONCE
+            # ----------------------------------------------------------
             local_video = f"/tmp/{os.path.basename(file_path)}"
+            print("⬇️ Downloading video from Telegram:", file_url, flush=True)
+
             with requests.get(file_url, stream=True) as r:
                 r.raise_for_status()
                 with open(local_video, "wb") as f:
@@ -99,21 +103,36 @@ def telegram_webhook():
                         if chunk:
                             f.write(chunk)
 
-            print("📦 Video size:", os.path.getsize(local_video), flush=True)
+            file_size = os.path.getsize(local_video)
+            print("📦 Downloaded video size:", file_size, flush=True)
 
+            if file_size < 10000:
+                print("❌ ERROR: Telegram video file is too small (corrupted).", flush=True)
+                return jsonify({"status": "error", "message": "Downloaded video corrupted"}), 500
+
+            # ----------------------------------------------------------
+            # Upload to Facebook
+            # ----------------------------------------------------------
             fb_caption = f"{caption}\n\n📢 From {channel_title}"
+            print("📤 Uploading video to Facebook...", flush=True)
 
-            # ⚡ Upload to Facebook
             fb_result = upload_video_to_facebook(local_video, fb_caption)
+            print("📘 Facebook upload result:", fb_result, flush=True)
 
-            # 🎥 Upload to YouTube
-            print("🎥 Starting YouTube upload...", flush=True)
+            # ----------------------------------------------------------
+            # Upload to YouTube
+            # ----------------------------------------------------------
+            print("🎥 Uploading video to YouTube...", flush=True)
+
             with open(local_video, "rb") as f:
                 yt_response = upload_video_stream(f, os.path.basename(local_video))
-            print("🎥 YouTube upload response:", yt_response, flush=True)
 
+            print("🎬 YouTube upload response:", yt_response, flush=True)
             yt_video_id = yt_response.get("id")
 
+            # ----------------------------------------------------------
+            # Save DB Log
+            # ----------------------------------------------------------
             new_post = TelePost(
                 channel_id=channel_id,
                 channel_title=channel_title,
@@ -125,7 +144,8 @@ def telegram_webhook():
             db.session.add(new_post)
             db.session.commit()
 
-            print(f"✅ Video post uploaded for {channel_title}")
+            print(f"✅ COMPLETED upload for {channel_title}", flush=True)
+
             return jsonify({
                 "status": "ok",
                 "facebook_result": fb_result,
