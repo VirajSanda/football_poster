@@ -7,6 +7,8 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
+import uuid
+import json
 
 # Local imports
 from models import db, Post, VideoUploadLog
@@ -18,6 +20,7 @@ from routes_birthday import birthday_routes  # ✅ Blueprint import
 from telegram_webhook import telegram_bp
 from dotenv import load_dotenv
 from youtube_upload import upload_video_stream 
+from facebook_poster import upload_video_to_facebook
 
 # ---------------- Load Environment Variables ---------------- #
 load_dotenv()
@@ -323,17 +326,51 @@ def upload_video():
     file = request.files["file"]
 
     try:
-        yt_video_id = upload_video_stream(file.stream, file.filename)
+        # Save uploaded file to a temporary path so we can send the same file
+        # to both YouTube (stream) and Facebook (file path). Use static/tmp
+        # under the project so it's writable on most hosts.
+        upload_dir = os.path.join(BASE_DIR, "static", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        safe_name = secure_filename(file.filename)
+        tmp_path = os.path.join(upload_dir, f"{uuid.uuid4().hex}_{safe_name}")
+
+        # Write file to disk
+        with open(tmp_path, "wb") as out:
+            out.write(file.read())
+
+        # Upload to YouTube using a file stream
+        with open(tmp_path, "rb") as stream:
+            yt_video_id = upload_video_stream(stream, file.filename)
+
+        # Upload to Facebook (expects a file path)
+        try:
+            fb_result = upload_video_to_facebook(tmp_path, file.filename)
+        except Exception as e:
+            fb_result = {"error": str(e)}
 
         log = VideoUploadLog(
             source="ui",
             original_filename=file.filename,
-            youtube_video_id=yt_video_id["id"]
+            youtube_video_id=(yt_video_id.get("id") if isinstance(yt_video_id, dict) else None),
+            error=None if isinstance(yt_video_id, dict) else str(yt_video_id),
         )
+        # attach facebook info as a text blob on the log if present
+        try:
+            log.facebook_response = json.dumps(fb_result)
+        except Exception:
+            log.facebook_response = str(fb_result)
+
         db.session.add(log)
         db.session.commit()
 
-        return jsonify({"ok": True, "youtube_id": yt_video_id})
+        # Cleanup temp file
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+
+        return jsonify({"ok": True, "youtube_id": yt_video_id, "facebook": fb_result})
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})

@@ -6,9 +6,10 @@ from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.errors import HttpError
-
+from dotenv import load_dotenv
 from config import Config
 
+load_dotenv()
 # --------------------------------------------------------------
 #  Generate Metadata (title, description, tags)
 # --------------------------------------------------------------

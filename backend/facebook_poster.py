@@ -3,7 +3,10 @@ import os
 import json
 from config import Config
 from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
 # For backward compatibility if needed
+
+load_dotenv()
 FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID or os.getenv("FACEBOOK_PAGE_ID")
 FACEBOOK_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN or os.getenv("FACEBOOK_ACCESS_TOKEN")
 

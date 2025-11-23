@@ -62,6 +62,7 @@ class VideoUploadLog(db.Model):
     original_filename = db.Column(db.String(500))
     youtube_video_id = db.Column(db.String(50))
     error = db.Column(db.Text, nullable=True)
+    facebook_response = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def serialize(self):
@@ -71,6 +72,7 @@ class VideoUploadLog(db.Model):
             "original_filename": self.original_filename,
             "youtube_video_id": self.youtube_video_id,
             "error": self.error,
+            "facebook_response": self.facebook_response,
             "created_at": self.created_at.isoformat(),
         }
 
