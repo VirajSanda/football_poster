@@ -8,6 +8,7 @@ from config import Config
 from models import db, TelePost
 import traceback
 from datetime import datetime
+from youtube_upload import upload_video_stream 
 
 telegram_bp = Blueprint("telegram", __name__)
 
@@ -62,6 +63,7 @@ def telegram_webhook():
                 article_url=""
             )
 
+            # ⚡ Upload to Facebook
             fb_caption = f"{caption}\n\n📢 From {channel_title}"
             fb_result = upload_to_facebook(branded_image, fb_caption)
 
@@ -92,7 +94,12 @@ def telegram_webhook():
                 f.write(requests.get(file_url).content)
 
             fb_caption = f"{caption}\n\n📢 From {channel_title}"
-            fb_result = upload_video_to_facebook(local_video, fb_caption)
+            fb_result = "1" # upload_video_to_facebook(local_video, fb_caption)
+
+            # ⚡ Upload to YouTube
+            with open(local_video, "rb") as f:
+                yt_response = upload_video_stream(f, os.path.basename(local_video))
+                yt_video_id = yt_response.get("id")
 
             new_post = TelePost(
                 channel_id=channel_id,
@@ -106,7 +113,7 @@ def telegram_webhook():
             db.session.commit()
 
             print(f"✅ Video post uploaded for {channel_title}")
-            return jsonify({"status": "ok", "facebook_result": fb_result}), 200
+            return jsonify({"status": "ok", "facebook_result": fb_result,"youtube_video_id": yt_video_id}), 200
 
         else:
             print(f"⚠️ No media found from {channel_title}")
