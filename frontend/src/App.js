@@ -141,6 +141,14 @@ function PostsPage() {
   const [actionLoading, setActionLoading] = useState({});
   const [selectedPosts, setSelectedPosts] = useState([]);
   const [fetchingNews, setFetchingNews] = useState(false);
+  const [approveModal, setApproveModal] = useState(null);
+  const [approveData, setApproveData] = useState({
+    title: "",
+    summary: "",
+    add_title: true,
+    post_now: false,
+    scheduled_time: "",
+  });
 
   const loadPosts = async (s) => {
     setLoading(true);
@@ -161,6 +169,19 @@ function PostsPage() {
   }, [status]);
 
   const handleAction = async (id, endpoint, actionName) => {
+    if (actionName === "Approve") {
+      const post = posts.find((p) => p.id === id);
+      setApproveData({
+        title: post.title || "",
+        summary: post.summary || "",
+        add_title: true,
+        post_now: false,
+        scheduled_time: "",
+      });
+      setApproveModal(post);
+      return;
+    }
+
     setActionLoading((prev) => ({ ...prev, [id]: actionName }));
     try {
       await fetch(`${API_BASE_URL}/${endpoint}/${id}`, { method: "POST" });
@@ -175,7 +196,6 @@ function PostsPage() {
 
   const handleBulkReject = async () => {
     if (selectedPosts.length === 0) return;
-
     if (
       !window.confirm(
         `Reject ${selectedPosts.length} selected post${
@@ -222,6 +242,51 @@ function PostsPage() {
     } else {
       setSelectedPosts(posts.map((p) => p.id));
     }
+  };
+
+  // ✅ Fixed Approve Modal Submit
+  const handleApproveSubmit = async () => {
+    if (!approveModal) return;
+
+    // Prevent double submission
+    if (actionLoading[approveModal.id] === "Approve") return;
+
+    const { title, summary, add_title, post_now, scheduled_time } = approveData;
+
+    const formData = new FormData();
+    formData.append("title", title);
+    formData.append("summary", summary);
+    formData.append("add_title", add_title);
+    formData.append("post_now", post_now);
+    if (scheduled_time) formData.append("scheduled_time", scheduled_time);
+
+    setActionLoading((prev) => ({ ...prev, [approveModal.id]: "Approve" }));
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/approve/${approveModal.id}`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.status === "success") {
+        setPosts((prev) => prev.filter((p) => p.id !== approveModal.id));
+        setApproveModal(null);
+      } else {
+        alert("⚠️ " + (data.message || "Failed to approve"));
+      }
+    } catch (err) {
+      console.error("Error approving post:", err);
+      alert("Failed to approve post.");
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [approveModal.id]: false }));
+    }
+  };
+
+  // Close modal function
+  const closeApproveModal = () => {
+    setApproveModal(null);
+    // Don't reset loading state here to prevent UI flicker
   };
 
   return (
@@ -415,6 +480,141 @@ function PostsPage() {
           </div>
         )}
       </div>
+
+      {/* ✅ Fixed Approve Modal (Bottom Sheet) */}
+      {approveModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+          <div
+            className="bg-white w-full sm:w-auto sm:max-w-lg rounded-t-2xl sm:rounded-xl shadow-lg p-6 space-y-4 animate-slideUp"
+            style={{ maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <h2 className="text-lg font-semibold text-gray-800">
+              Approve Post: {approveModal.title}
+            </h2>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={approveData.title}
+                  onChange={(e) =>
+                    setApproveData({ ...approveData, title: e.target.value })
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-1"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Summary
+                </label>
+                <textarea
+                  value={approveData.summary}
+                  onChange={(e) =>
+                    setApproveData({ ...approveData, summary: e.target.value })
+                  }
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-1"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={approveData.add_title}
+                  onChange={(e) =>
+                    setApproveData({
+                      ...approveData,
+                      add_title: e.target.checked,
+                    })
+                  }
+                />
+                <label className="text-sm text-gray-700">
+                  Add Title Overlay
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={approveData.post_now}
+                  onChange={(e) =>
+                    setApproveData({
+                      ...approveData,
+                      post_now: e.target.checked,
+                    })
+                  }
+                />
+                <label className="text-sm text-gray-700">Post Now</label>
+              </div>
+
+              {!approveData.post_now && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Schedule Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={approveData.scheduled_time}
+                    onChange={(e) =>
+                      setApproveData({
+                        ...approveData,
+                        scheduled_time: e.target.value,
+                      })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-1"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
+              <button
+                onClick={closeApproveModal}
+                disabled={actionLoading[approveModal.id] === "Approve"}
+                className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 transition-colors w-1/2 sm:w-auto"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApproveSubmit}
+                disabled={actionLoading[approveModal.id] === "Approve"}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center w-1/2 sm:w-auto"
+              >
+                {actionLoading[approveModal.id] === "Approve" ? (
+                  <>
+                    <span className="animate-spin mr-2">⟳</span>
+                    Approving...
+                  </>
+                ) : (
+                  "Confirm"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>
+        {`
+          @keyframes slideUp {
+            from {
+              transform: translateY(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateY(0);
+              opacity: 1;
+            }
+          }
+          .animate-slideUp {
+            animation: slideUp 0.25s ease-out;
+          }
+        `}
+      </style>
     </div>
   );
 }
