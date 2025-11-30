@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 # For backward compatibility if needed
 
 load_dotenv()
-FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID or os.getenv("FACEBOOK_PAGE_ID")
-FACEBOOK_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN or os.getenv("FACEBOOK_ACCESS_TOKEN")
+FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID
+FACEBOOK_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN
 
 def upload_to_facebook(image_path, caption):
     """
@@ -157,3 +157,68 @@ def upload_video_to_facebook(video_path, caption):
 
     response = requests.post(url, files=files, data=data)
     return response.json()
+
+def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=None, link=None, scheduled_time=None):
+    # Final message
+    
+    if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
+        print("❌ FACEBOOK CREDS FAILED →", FACEBOOK_PAGE_ID, FACEBOOK_ACCESS_TOKEN)
+        return {"error": "Facebook credentials not configured"}
+
+    message = f"{title}\n\n{summary}\n\n{hashtags}".strip()
+
+    # Handle scheduled posting
+    scheduled_timestamp = None
+    if scheduled_time:
+        dt = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        now_utc = datetime.now(timezone.utc)
+        if dt < now_utc + timedelta(minutes=10):
+            dt = now_utc + timedelta(minutes=11)
+
+        scheduled_timestamp = dt.isoformat()
+
+    # 1️⃣ Upload photos as unpublished
+    media_items = []
+    if image_paths:
+        for path in image_paths:
+            if not os.path.exists(path):
+                print(f"[WARN] Missing image: {path}")
+                continue
+
+            photo_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/photos"
+            with open(path, "rb") as img:
+                res = requests.post(
+                    photo_url,
+                    params={"published": "false", "access_token": FACEBOOK_ACCESS_TOKEN},
+                    files={"source": img}
+                )
+
+            data = res.json()
+            if "id" in data:
+                media_items.append({"media_fbid": data["id"]})
+            else:
+                print("❌ Facebook photo upload failed:", data)
+
+    # 2️⃣ Final feed post
+    feed_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/feed"
+    payload = {
+        "message": message,
+        "access_token": FACEBOOK_ACCESS_TOKEN,
+        "published": "false" if scheduled_timestamp else "true"
+    }
+
+    if scheduled_timestamp:
+        payload["scheduled_publish_time"] = scheduled_timestamp
+
+    if media_items:
+        payload["attached_media"] = json.dumps(media_items)
+
+    res = requests.post(feed_url, data=payload)
+    result = res.json()
+    result["attached_media_count"] = len(media_items)
+
+    return result
+

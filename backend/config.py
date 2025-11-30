@@ -1,5 +1,9 @@
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 class Config:
     FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
     FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")

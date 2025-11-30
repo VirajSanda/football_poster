@@ -3,49 +3,92 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import uuid
 import json
+from sqlalchemy import or_
 
 # Local imports
-from models import db, Post, VideoUploadLog
+from models import db, Post, VideoUploadLog, FootballNews, BirthdayPost
 from image_generator import generate_post_image, generate_hashtags, PLACEHOLDER_PATH, generate_post_image_nocrop
-from facebook_poster import post_to_facebook, post_to_facebook_scheduled
-from football_birthdays import get_week_birthdays
-from birthday_image import generate_birthday_image
-from routes_birthday import birthday_routes  # ✅ Blueprint import
+from facebook_poster import post_to_facebook, post_to_facebook_scheduled, post_multiple_to_facebook_scheduled
 from telegram_webhook import telegram_bp
+from generate_birthday_post_v2 import generate_birthday_post_v2
 from dotenv import load_dotenv
 from youtube_upload import upload_video_stream 
 from facebook_poster import upload_video_to_facebook
-
+from config import Config
+import threading
+import time
+import logging
 # ---------------- Load Environment Variables ---------------- #
 load_dotenv()
 # ---------------- App Setup ---------------- #
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-
 app = Flask(__name__, static_folder="static")
 CORS(app)
-
-# ✅ Register the birthday blueprint routes
-app.register_blueprint(birthday_routes)
 
 # ✅ Register the Telegram webhook blueprint
 app.register_blueprint(telegram_bp, url_prefix="/telegram")
 
 # ---------------- Database Setup ---------------- #
+
 DB_PATH = os.path.join(BASE_DIR, "posts.db")
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
+# Use PostgreSQL in production, SQLite locally
+if os.environ.get("RENDER"):  # Render sets this environment variable
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url and database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    print("🚀 Using PostgreSQL database")
+else:
+    # Local development - use SQLite
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
+    print("💻 Using SQLite database")
+
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
 with app.app_context():
-    db.create_all()
+    try:
+        print("🔄 Creating database tables...")
+        db.create_all()
+        print("✅ Tables created successfully!")
+        
+        # Check which database we're using
+        is_postgres = 'postgresql' in app.config["SQLALCHEMY_DATABASE_URI"]
+        
+        if is_postgres:
+            print("🚀 Using PostgreSQL database")
+            # PostgreSQL-specific checks
+            result = db.session.execute(db.text("SELECT current_database();"))
+            db_name = result.fetchone()[0]
+            print(f"📊 Connected to database: {db_name}")
+            
+            # List all tables
+            result = db.session.execute(db.text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """))
+            tables = [row[0] for row in result.fetchall()]
+            print(f"📋 Existing tables: {tables}")
+        else:
+            print("💻 Using SQLite database")
+            # SQLite-specific checks
+            result = db.session.execute(db.text("SELECT name FROM sqlite_master WHERE type='table';"))
+            tables = [row[0] for row in result.fetchall()]
+            print(f"📋 Existing tables: {tables}")
+        
+    except Exception as e:
+        print(f"❌ Database error: {e}")
+        import traceback
+        traceback.print_exc()
 
 # ---------------- Helpers ---------------- #
 def get_main_image(article_url: str):
@@ -209,6 +252,48 @@ def fetch_news():
 
     db.session.commit()
     return jsonify([p.serialize() for p in new_posts])
+
+# ---------------- Auto Fetch News ---------------- #
+def auto_fetch_news():
+        """Background task to fetch news automatically every 4 hours"""
+        with app.app_context():
+            try:
+                print("🔄 Auto-fetching news...")
+                articles = fetch_news()
+                new_count = 0
+                
+                for a in articles:
+                    if Post.query.filter_by(title=a["title"]).first():
+                        continue  # Skip duplicates
+
+                    img_path = generate_post_image_nocrop("", a["image_url"], a["url"], a["summary"], add_title=False)
+                    if not img_path:
+                        print(f"⚠️ Skipped {a['title']} due to missing image")
+                        continue
+
+                    hashtags = " ".join(generate_hashtags(a["title"], a["summary"]))
+
+                    post = Post(
+                        title=a["title"],
+                        link=a["url"],
+                        summary=a["summary"],
+                        full_description=a["summary"],
+                        image=img_path,
+                        hashtags=hashtags,
+                        status="draft",
+                    )
+                    db.session.add(post)
+                    new_count += 1
+
+                db.session.commit()
+                print(f"✅ Auto-fetched {new_count} new posts at {datetime.now()}")
+                
+            except Exception as e:
+                print(f"🔥 ERROR in auto_fetch_news: {str(e)}")
+                import traceback
+                traceback.print_exc()
+
+# ---------------- Manual Upload Endpoint ---------------- #
 
 @app.route("/upload_manual_post", methods=["POST"])
 def upload_manual_post():
@@ -374,6 +459,305 @@ def upload_video():
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+# ---------------- Birthday Posts Endpoints ---------------- #
+
+# ✅ Fetch and auto-generate birthday posts      
+@app.route("/birthday_posts", methods=["GET"])
+def birthday_posts():
+    try:
+        
+        # --- CLEANUP: Remove OLD birthday posts (anything not from today) ---
+        today_date = datetime.now(timezone.utc).date()
+
+        old_posts = BirthdayPost.query.filter(
+            db.func.date(BirthdayPost.created_at) != today_date
+        ).all()
+
+        if old_posts:
+            for p in old_posts:
+                db.session.delete(p)
+            db.session.commit()
+            print(f"🧹 Deleted {len(old_posts)} old birthday posts.")
+            
+        # --- Step 1: Fetch today's Wikipedia birthdays ---
+        today = datetime.now(timezone.utc)
+        month = f"{today.month:02d}"
+        day = f"{today.day:02d}"
+        url = f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/births/{month}/{day}"
+        
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0 Safari/537.36"
+            ),
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://commons.wikimedia.org/"
+        }
+
+        res = safe_get(url, headers, timeout=25)
+        if not res:
+            return {"error": "Wikipedia unreachable"}
+        status = request.args.get("status")
+
+        if res.status_code != 200:
+            print(f"⚠️ Wikipedia API returned {res.status_code}")
+            return jsonify({"count": 0, "posts": []})
+
+        data = res.json()
+        births = data.get("births", []) if isinstance(data, dict) else []
+        results = []
+
+        # --- Step 2: Filter Film/TV personalities ---
+        film_keywords = [
+            "actor", "actress", "film", "television", "tv", "cinema",
+            "director", "producer", "filmmaker", "show", "drama"
+        ]
+
+        for person in births:
+            name = person.get("text", "")
+            year = person.get("year", "Unknown")
+            pages = person.get("pages", []) or []
+            if not name or not pages:
+                continue
+
+            first_page = pages[0]
+            summary = first_page.get("extract", "") or ""
+            thumb = first_page.get("thumbnail")
+            image = thumb.get("source", "") if isinstance(thumb, dict) else ""
+
+            is_film_tv = any(k in summary.lower() for k in film_keywords)
+
+            results.append({
+                "name": name,
+                "year": year,
+                "summary": summary,
+                "image": image,
+                "is_film_tv": is_film_tv,
+            })
+
+        if not results:
+            print("⚠️ No birthdays found.")
+            return jsonify({"count": 0, "posts": []})
+
+        # --- Step 3: Save all results to DB ---
+        film_tv_results = [r for r in results if r["is_film_tv"] and r["year"] > 1950]
+        saved_posts = []
+        for r in film_tv_results:
+            birth_year_str = str(r["year"])
+            # Avoid duplicate insert if already exists for today
+            
+            existing = BirthdayPost.query.filter_by(
+                name=r["name"], 
+                birth_year=birth_year_str  # Compare as string
+            ).first()
+            if existing:
+                continue
+                
+            post = BirthdayPost(
+                name=r["name"],
+                birth_year=birth_year_str,  # Store as string
+                summary=r["summary"],
+                image=r["image"],
+                status="pending_generation",
+                created_at=datetime.now(timezone.utc),
+            )
+            db.session.add(post)
+            saved_posts.append(post)
+        db.session.commit()
+
+        print(f"✅ Saved {len(saved_posts)} new Film/TV posts to DB.")
+
+        # --- Step 5: Return all posts from DB ---
+        query = BirthdayPost.query
+        if status:
+            query = query.filter_by(status=status)
+        else:
+            # Default: show only posts that are pending generation
+            query = query.filter_by(status="pending_generation")
+
+        posts = query.order_by(BirthdayPost.created_at.desc()).all()
+
+        # ✅ SAFELY SERIALIZE — fix for “NoneType has no attribute isoformat”
+        def safe_serialize(post):
+            return {
+                "id": post.id,
+                "name": post.name,
+                "birth_year": post.birth_year,
+                "summary": post.summary,
+                "image": post.image,
+                "title": getattr(post, "title", None),
+                "status": post.status,
+                "created_at": post.created_at.isoformat() if post.created_at else None,
+                "updated_at": post.updated_at.isoformat() if getattr(post, "updated_at", None) else None,
+                "image_urls": getattr(post, "image_urls", None),
+                "composite_style": getattr(post, "composite_style", None),
+                "text_position": getattr(post, "text_position", None),
+                "theme": getattr(post, "theme", None),
+                "source_type": getattr(post, "source_type", None),
+                "output_path": getattr(post, "output_path", None),
+            }
+
+        return jsonify([safe_serialize(p) for p in posts])
+
+    except Exception as e:
+        print("🔥 Error in birthday_posts:", str(e))
+        return jsonify({"count": 0, "posts": []}), 500
+
+# ✅ Approve Birthday Post
+@app.route("/reject_post/<int:post_id>", methods=["POST"])
+def reject_post_api(post_id):
+    try:
+        post = BirthdayPost.query.get(post_id)
+        if not post:
+            return jsonify({"error": "Post not found"}), 404
+
+        post.status = "rejected"
+        db.session.commit()
+
+        return jsonify({"success": True, "message": f"Post {post_id} rejected."})
+    except Exception as e:
+        print("🔥 Error rejecting post:", str(e))
+        return jsonify({"error": "Failed to reject post"}), 500
+
+# ✅ Advanced Birthday Post Generation (v2)
+@app.route("/birthday_post_direct", methods=["POST"])
+def birthday_post_direct():
+    try:
+        # If JSON was sent (rare), handle it
+        if request.content_type and "application/json" in request.content_type:
+            data = request.get_json()
+            name = data.get("name")
+            year = data.get("year")
+            image_urls = data.get("image_urls", [])
+            uploaded_files = []
+        else:
+            # ✔️ FormData (React FE)
+            name = request.form.get("name")
+            year = request.form.get("year")
+            image_urls = request.form.getlist("image_urls")  
+            uploaded_files = request.files.getlist("images")  
+
+        # Convert uploaded files → local saved paths
+        local_paths = []
+        upload_dir = "uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        for file in uploaded_files:
+            filename = secure_filename(file.filename)
+            save_path = os.path.join(upload_dir, filename)
+            file.save(save_path)
+            local_paths.append(save_path)
+
+        # Use uploaded images OR remote URLs
+        final_image_sources = local_paths if local_paths else image_urls
+
+        if not final_image_sources:
+            return jsonify({"error": "No images provided"}), 400
+
+        # 2️⃣ Build message
+        message = f"Happy Birthday {name}! 🎉🎂"
+
+        # 3️⃣ POST all images to Facebook (multi-image post)
+        fb_result = post_multiple_to_facebook_scheduled(
+            title=message,
+            summary="",
+            hashtags="",
+            image_paths=final_image_sources,  # <-- ALL IMAGES
+            scheduled_time=request.form.get("scheduled_time")
+        )
+
+        # 4️⃣ Update status in DB
+        post_id = request.form.get("post_id")
+        if post_id:
+            bp = BirthdayPost.query.get(int(post_id))
+            if bp:
+                if "id" in fb_result:     # Facebook success
+                    bp.status = "posted"
+                    bp.fb_post_id = fb_result["id"]
+                else:
+                    bp.status = "failed"
+
+                bp.updated_at = datetime.now(timezone.utc)
+                db.session.commit()
+                print(f"📌 Updated DB record {post_id} → {bp.status}")
+                
+        # 4️⃣ Cleanup local files if any
+        for path in local_paths:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+                    print(f"🧹 Deleted local file: {path}")
+            except Exception as cleanup_err:
+                print(f"⚠️ Cleanup failed for {path}: {cleanup_err}")
+
+        return jsonify({
+            "success": True,
+            "message": message,
+            "image_count": len(final_image_sources),
+            "facebook_result": fb_result
+        })
+
+    except Exception as e:
+        print("🔥 Error in /birthday_post_direct:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ---------------- Scraper API Endpoints ---------------- #
+@app.route('/trigger-scraper', methods=['POST'])
+def trigger_scraper():
+    """Manually trigger the news scraper"""
+    try:
+        from scraper import run_scraper
+        run_scraper(dry_run=False)
+        return jsonify({"status": "success", "message": "Scraper run completed"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/scraper-status', methods=['GET'])
+def scraper_status():
+    """Check scraper status"""
+    return jsonify({
+        "status": "running", 
+        "thread_alive": scraper_thread.is_alive() if 'scraper_thread' in globals() else False
+    })
+
+# ---------------- Background Scraper Scheduler ---------------- #
+def start_scraper_scheduler():
+    """Start background scraper that runs every 4 hours"""
+    def scraper_worker():
+        logger = logging.getLogger("scraper_scheduler")
+        interval_hours = 4
+        interval_seconds = interval_hours * 3600
+        
+        logger.info(f"🚀 Scraper scheduler started (interval: {interval_hours} hours)")
+        
+        # Wait a bit for app to fully start
+        time.sleep(30)
+        
+        while True:
+            try:
+                logger.info("🔄 Starting scheduled scraper run...")
+                from scraper import run_scraper
+                run_scraper(dry_run=False)
+                logger.info("✅ Scheduled scraper run completed")
+                logger.info("🔄 Starting scheduled fetch news run...")
+                auto_fetch_news()
+                logger.info("✅ Scheduled fetch news run completed")
+            except Exception as e:
+                logger.error(f"❌ Scheduled scraper run failed: {e}")
+            
+            logger.info(f"⏰ Waiting {interval_hours} hours until next run...")
+            time.sleep(interval_seconds)
+    
+    # Start in background thread
+    thread = threading.Thread(target=scraper_worker, daemon=True)
+    thread.start()
+    return thread
+
+# Start the scraper scheduler when app starts
+scraper_thread = start_scraper_scheduler()
 
 # ---------------- Main ---------------- #
 if __name__ == "__main__":

@@ -49,10 +49,10 @@ def generate_metadata(filename: str):
 def get_youtube_client():
     creds = Credentials(
         None,
-        refresh_token=os.getenv("YOUTUBE_REFRESH_TOKEN") or Config.YOUTUBE_REFRESH_TOKEN,
+        refresh_token=Config.YOUTUBE_REFRESH_TOKEN,
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.getenv("YOUTUBE_CLIENT_ID") or Config.YOUTUBE_CLIENT_ID,
-        client_secret=os.getenv("YOUTUBE_CLIENT_SECRET") or Config.YOUTUBE_CLIENT_SECRET,
+        client_id=Config.YOUTUBE_CLIENT_ID,
+        client_secret=Config.YOUTUBE_CLIENT_SECRET,
     )
 
     try:

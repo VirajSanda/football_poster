@@ -76,4 +76,78 @@ class VideoUploadLog(db.Model):
             "created_at": self.created_at.isoformat(),
         }
 
+class BirthdayPost(db.Model):
+    __tablename__ = "birthday_posts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    birth_year = db.Column(db.String(10))
+    summary = db.Column(db.Text)
+    image = db.Column(db.String(512))
+    title = db.Column(db.String(255))
+    status = db.Column(db.String(50), default="pending")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # --- 🔸 New fields (safe to add) ---
+    image_urls = db.Column(db.Text)  # JSON-encoded list of image URLs (for collage/multiple)
+    composite_style = db.Column(db.String(50), default="single")  # single | collage | side_by_side
+    text_position = db.Column(db.String(50), default="auto")  # auto | top | middle | bottom | custom
+    theme = db.Column(db.String(50), default="gold")  # for consistent look
+    source_type = db.Column(db.String(50), default="wiki_fallback")  # or manual_upload
+    output_path = db.Column(db.String(512))  # final generated file path (static/birthday_posts/*.jpg)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "birth_year": self.birth_year,
+            "summary": self.summary,
+            "image": self.image,
+            "image_urls": json.loads(self.image_urls) if self.image_urls else [],
+            "title": self.title,
+            "status": self.status,
+            "composite_style": self.composite_style,
+            "text_position": self.text_position,
+            "theme": self.theme,
+            "source_type": self.source_type,
+            "output_path": self.output_path,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+        
+class FootballNews(db.Model):
+    __tablename__ = "football_news"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.Text, nullable=False)
+    summary = db.Column(db.Text)
+    url = db.Column(db.Text, unique=True, nullable=False)
+    image_url = db.Column(db.Text)
+    source = db.Column(db.String(100))
+    published_at = db.Column(db.DateTime, default=datetime.utcnow)
+    seq = db.Column(db.Integer, index=True)          # sequence number for posting
+    posted = db.Column(db.Boolean, default=False)    # posted flag
+    hash = db.Column(db.String(64), index=True)      # sha256(title+summary)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    scheduled_time = db.Column(db.DateTime, nullable=True)
+    posted_at = db.Column(db.DateTime, nullable=True)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "summary": self.summary,
+            "url": self.url,
+            "image_url": self.image_url,
+            "source": self.source,
+            "published_at": self.published_at.isoformat() if self.published_at else None,
+            "seq": self.seq,
+            "posted": bool(self.posted),
+            "hash": self.hash,
+            "created_at": self.created_at.isoformat(),
+            "scheduled_time": self.scheduled_time.isoformat(),
+            "posted_at": self.posted_at.isoformat(),
+        }
+
         
