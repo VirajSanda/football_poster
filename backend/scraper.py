@@ -1003,10 +1003,10 @@ def insert_articles(session, articles, dry_run=False):
     existing_urls = get_existing_urls(session)
     existing_hashes = get_existing_hashes(session)
     
-    if not isinstance(results, list):
+    if not isinstance(articles, list):
         logger.error(f"Scraper {source_name} returned non-list: {type(results)}")
-        results = []
-        
+        articles = []
+
     normalized = [normalize_article(a) for a in articles]
     filtered = [a for a in normalized if looks_like_football(a["title"], a["summary"], a["url"])]
 

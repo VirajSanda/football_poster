@@ -261,10 +261,10 @@ def auto_fetch_news():
                 print("🔄 Auto-fetching news...")
                 articles = fetch_news()
                 new_count = 0
-                if not isinstance(results, list):
-                    logger.error(f"Scraper {source_name} returned non-list: {type(results)}")
-                    results = []
-                    
+                if not isinstance(articles, list):
+                    logger.error(f"Scraper {source_name} returned non-list: {type(articles)}")
+                    articles = []
+
                 for a in articles:
                     if Post.query.filter_by(title=a["title"]).first():
                         continue  # Skip duplicates
