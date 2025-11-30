@@ -1162,9 +1162,7 @@ function BirthdayGenerator() {
       )}
 
       <div className="p-4 flex justify-between items-center bg-white shadow">
-        <h2 className="text-lg font-semibold">
-          🎂 Today's Celebrity Birthdays
-        </h2>
+        <h2 className="text-lg font-semibold">🎂 Today's Player Birthdays</h2>
         <button
           onClick={loadBirthdays}
           disabled={loading}

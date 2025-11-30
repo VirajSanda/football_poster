@@ -132,6 +132,7 @@ class FootballNews(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     scheduled_time = db.Column(db.DateTime, nullable=True)
     posted_at = db.Column(db.DateTime, nullable=True)
+    video_url = db.Column(db.String(500), nullable=True) 
 
     def serialize(self):
         return {
@@ -148,6 +149,7 @@ class FootballNews(db.Model):
             "created_at": self.created_at.isoformat(),
             "scheduled_time": self.scheduled_time.isoformat(),
             "posted_at": self.posted_at.isoformat(),
+            "video_url": self.video_url,
         }
 
         

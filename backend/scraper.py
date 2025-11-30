@@ -1,5 +1,6 @@
 """
 Cron-ready scraper for football news with built-in Facebook scheduling
+Supports both images and videos for Facebook posts
 """
 import os
 import sys
@@ -35,7 +36,7 @@ FOOTBALL_KEYWORDS = [
     "la liga", "laliga", "serie a", "seriea", "bundesliga", 
     "champions league", "europa league", "europa conference", "uefa",
     "world cup", "euro", "euros", "euro2024", "euro 2024",
-    "transfer", "signing", "transfer news", "transfer window",
+    "transfer", "signing",
     "goal", "goals", "match", "fixture", "lineup", "starting xi",
     "injury", "injury update", "team news", "tactics", "formation",
     "manager", "coach", "preseason", "pre-season", "friendly",
@@ -56,7 +57,7 @@ AMERICAN_FOOTBALL_KEYWORDS = [
     "kickoff", "onside kick", "hail mary", "playoff", "pro bowl",
     "american football", "gridiron", "first down", "end zone",
     "ncaa football", "college football", "cfb", "xfl", "usfl", "question", 
-    "quiz", "?"
+    "quiz", "?", "Latest Transfer News", "Transfer Rumours", "Latest football news from Premier League"
 ]
 
 def looks_like_football(title: str, summary: str, url: str) -> bool:
@@ -76,6 +77,7 @@ def normalize_article(item: Dict) -> Dict:
         "summary": (item.get("summary") or "").strip(),
         "url": (item.get("url") or "").strip(),
         "image_url": (item.get("image_url") or "").strip() if item.get("image_url") else None,
+        "video_url": (item.get("video_url") or "").strip() if item.get("video_url") else None,
         "source": (item.get("source") or "").strip(),
     }
 
@@ -187,11 +189,26 @@ def scrape_premier_league():
                             elif image_url.startswith('/'):
                                 image_url = f"https://www.premierleague.com{image_url}"
                     
+                    # Extract video (if available)
+                    video_url = None
+                    video_selectors = ['video', 'iframe[src*="youtube"]', 'iframe[src*="vimeo"]', '[data-video-url]']
+                    for video_sel in video_selectors:
+                        video_el = article.select_one(video_sel)
+                        if video_el:
+                            video_url = video_el.get('src') or video_el.get('data-src') or video_el.get('data-video-url')
+                            if video_url:
+                                if video_url.startswith('//'):
+                                    video_url = 'https:' + video_url
+                                elif video_url.startswith('/'):
+                                    video_url = f"https://www.premierleague.com{video_url}"
+                                break
+                    
                     results.append({
                         "title": title[:300],  # Limit title length
                         "summary": summary[:500],  # Limit summary length
                         "url": href,
                         "image_url": image_url,
+                        "video_url": video_url,
                         "source": "Premier League"
                     })
                     
@@ -307,11 +324,23 @@ def scrape_fifa_news():
                             elif image_url.startswith('/'):
                                 image_url = f"https://www.fifa.com{image_url}"
                     
+                    # Extract video
+                    video_url = None
+                    video_el = article.select_one('video, iframe[src*="youtube"], iframe[src*="vimeo"]')
+                    if video_el:
+                        video_url = video_el.get('src') or video_el.get('data-src')
+                        if video_url:
+                            if video_url.startswith('//'):
+                                video_url = 'https:' + video_url
+                            elif video_url.startswith('/'):
+                                video_url = f"https://www.fifa.com{video_url}"
+                    
                     results.append({
                         "title": title[:300],
                         "summary": summary[:500],
                         "url": href,
                         "image_url": image_url,
+                        "video_url": video_url,
                         "source": "FIFA"
                     })
                     
@@ -392,11 +421,20 @@ def scrape_espn_fc():
                     if image_url and image_url.startswith('//'):
                         image_url = 'https:' + image_url
                 
+                # Extract video
+                video_url = None
+                video_el = article.select_one('video, iframe[src*="youtube"], iframe[src*="vimeo"]')
+                if video_el:
+                    video_url = video_el.get('src') or video_el.get('data-src')
+                    if video_url and video_url.startswith('//'):
+                        video_url = 'https:' + video_url
+                
                 results.append({
                     "title": title,
                     "summary": summary,
                     "url": href,
                     "image_url": image_url,
+                    "video_url": video_url,
                     "source": "ESPN FC"
                 })
                 
@@ -464,11 +502,23 @@ def scrape_sky_sports():
                         elif image_url.startswith('/'):
                             image_url = f"https://www.skysports.com{image_url}"
                 
+                # Extract video
+                video_url = None
+                video_el = article.select_one('video, iframe[src*="youtube"], iframe[src*="vimeo"]')
+                if video_el:
+                    video_url = video_el.get('src') or video_el.get('data-src')
+                    if video_url:
+                        if video_url.startswith('//'):
+                            video_url = 'https:' + video_url
+                        elif video_url.startswith('/'):
+                            video_url = f"https://www.skysports.com{video_url}"
+                
                 results.append({
                     "title": title,
                     "summary": summary,
                     "url": href,
                     "image_url": image_url,
+                    "video_url": video_url,
                     "source": "Sky Sports"
                 })
                 
@@ -532,11 +582,20 @@ def scrape_bbc_sport():
                     if image_url and image_url.startswith('//'):
                         image_url = 'https:' + image_url
                 
+                # Extract video
+                video_url = None
+                video_el = article.select_one('video, iframe[src*="youtube"], iframe[src*="vimeo"]')
+                if video_el:
+                    video_url = video_el.get('src') or video_el.get('data-src')
+                    if video_url and video_url.startswith('//'):
+                        video_url = 'https:' + video_url
+                
                 results.append({
                     "title": title,
                     "summary": summary,
                     "url": href,
                     "image_url": image_url,
+                    "video_url": video_url,
                     "source": "BBC Sport"
                 })
                 
@@ -603,11 +662,23 @@ def scrape_goal_com():
                     elif image_url and image_url.startswith('/'):
                         image_url = f"https://www.goal.com{image_url}"
                 
+                # Extract video
+                video_url = None
+                video_el = article.select_one('video, iframe[src*="youtube"], iframe[src*="vimeo"]')
+                if video_el:
+                    video_url = video_el.get('src') or video_el.get('data-src')
+                    if video_url:
+                        if video_url.startswith('//'):
+                            video_url = 'https:' + video_url
+                        elif video_url.startswith('/'):
+                            video_url = f"https://www.goal.com{video_url}"
+                
                 results.append({
                     "title": title,
                     "summary": summary,
                     "url": href,
                     "image_url": image_url,
+                    "video_url": video_url,
                     "source": "Goal.com"
                 })
                 
@@ -623,7 +694,7 @@ def scrape_goal_com():
     return results[:15]
 
 # --------------------------------------------------------------------
-# DUPLICATE PREVENTION & OTHER FUNCTIONS (keep the same as before)
+# DUPLICATE PREVENTION & OTHER FUNCTIONS
 # --------------------------------------------------------------------
 def get_recent_facebook_posts(hours=48):
     """Get recent posts from Facebook to check for duplicates"""
@@ -691,28 +762,29 @@ def is_already_scheduled(session, title, url):
     
     return False
 
-def check_missing_images(articles):
-    """Check for articles without images and log warnings"""
-    articles_without_images = []
+def check_missing_media(articles):
+    """Check for articles without images/videos and log warnings"""
+    articles_without_media = []
     
     for article in articles:
         image_url = article.get('image_url')
-        if not image_url or image_url.strip() == '':
-            articles_without_images.append({
+        video_url = article.get('video_url')
+        if (not image_url or image_url.strip() == '') and (not video_url or video_url.strip() == ''):
+            articles_without_media.append({
                 'title': article.get('title', 'No Title'),
                 'url': article.get('url', 'No URL'),
                 'source': article.get('source', 'Unknown Source')
             })
     
-    if articles_without_images:
-        logger.warning("🚨 ARTICLES WITHOUT IMAGES FOUND:")
-        for article in articles_without_images:
+    if articles_without_media:
+        logger.warning("🚨 ARTICLES WITHOUT IMAGES/VIDEOS FOUND:")
+        for article in articles_without_media:
             logger.warning("   - Title: %s", article['title'])
             logger.warning("     URL: %s", article['url'])
             logger.warning("     Source: %s", article['source'])
             logger.warning("     ---")
     
-    return articles_without_images
+    return articles_without_media
 
 # --------------------------------------------------------------------
 # SCHEDULING LOGIC
@@ -734,7 +806,7 @@ def get_next_schedule_time(start_time=None, hour_interval=2):
     return next_time
 
 def schedule_new_posts(session, dry_run=False):
-    """Schedule posts with enhanced duplicate checking and image detection"""
+    """Schedule posts with enhanced duplicate checking and media detection"""
     try:
         # Get unscheduled, non-posted articles
         unscheduled_posts = session.query(FootballNews).filter(
@@ -782,24 +854,29 @@ def schedule_new_posts(session, dry_run=False):
             # Prepare hashtags
             hashtags = get_hashtags_for_source(post.source)
             
-            # Log if post has no image
-            if not post.image_url:
-                logger.warning("📸 Scheduling post WITHOUT IMAGE: %s", post.title)
+            # Log media status
+            if post.video_url:
+                logger.info("🎥 Post has video: %s", post.title)
+            elif not post.image_url:
+                logger.warning("📸 Scheduling post WITHOUT MEDIA: %s", post.title)
             
-            # Schedule Facebook post with image
+            # Schedule Facebook post with media (video takes priority over image)
             if not dry_run:
                 result = post_to_facebook_scheduled(
                     title=post.title,
                     summary=summary,
                     hashtags=hashtags,
                     image_url=post.image_url,
+                    video_url=post.video_url,
                     link=post.url,
                     scheduled_time=next_time
                 )
                 
                 if "id" in result:
-                    if not post.image_url:
-                        logger.warning("✅ Scheduled post WITHOUT IMAGE: %s for %s", post.title, next_time)
+                    if post.video_url:
+                        logger.info("✅ Scheduled video post: %s for %s", post.title, next_time)
+                    elif not post.image_url:
+                        logger.warning("✅ Scheduled post WITHOUT MEDIA: %s for %s", post.title, next_time)
                     else:
                         logger.info("✅ Scheduled Facebook post with image: %s for %s", post.title, next_time)
                     # Mark as scheduled in database
@@ -843,11 +920,11 @@ def get_hashtags_for_source(source):
         return base_hashtags
 
 # --------------------------------------------------------------------
-# FACEBOOK INTEGRATION (keep the same as before)
+# FACEBOOK INTEGRATION - UPDATED FOR VIDEO SUPPORT
 # --------------------------------------------------------------------
-def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, link=None, scheduled_time=None):
+def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_url=None, link=None, scheduled_time=None):
     """
-    Posts to Facebook Page feed with rich media - image + text, not just link sharing.
+    Posts to Facebook Page feed with rich media - image/video + text, not just link sharing.
     Can be scheduled or published immediately.
     """
     if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
@@ -879,7 +956,73 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, link=No
         except Exception as e:
             return {"error": f"Invalid scheduled_time: {str(e)}"}
 
-    # If we have an image URL, download and upload it
+    # If we have a VIDEO URL, upload it as video (priority over image)
+    if video_url:
+        try:
+            logger.info(f"📹 Processing video from {video_url}")
+            
+            # Download the video to temporary file
+            response = requests.get(video_url, timeout=30, stream=True)
+            if response.status_code == 200:
+                # Create a temporary file for video
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        temp_file.write(chunk)
+                    temp_video_path = temp_file.name
+
+                # Upload video to Facebook
+                video_upload_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
+                
+                with open(temp_video_path, "rb") as video_file:
+                    files = {"source": video_file}
+                    params = {
+                        "description": message,
+                        "access_token": FACEBOOK_ACCESS_TOKEN,
+                    }
+                    
+                    # Add scheduling if needed
+                    if scheduled_timestamp:
+                        params["published"] = "false"
+                        params["scheduled_publish_time"] = scheduled_timestamp
+                    else:
+                        params["published"] = "true"
+
+                    # Upload video
+                    response = requests.post(video_upload_url, params=params, files=files)
+                
+                # Clean up temp file
+                os.unlink(temp_video_path)
+
+                result = response.json()
+                
+                if "id" in result:
+                    logger.info("✅ Successfully scheduled video post")
+                    result["debug_info"] = {
+                        "scheduled_time_final": scheduled_timestamp,
+                        "message": message,
+                        "published": params.get("published"),
+                        "media_type": "video",
+                        "video_url": video_url
+                    }
+                    return result
+                else:
+                    logger.warning(f"❌ Video upload failed: {result}")
+                    # Fall back to image or text post
+                    if link:
+                        message += f"\n\nWatch video: {link}"
+
+            else:
+                logger.warning(f"Failed to download video from {video_url}, falling back to image/text post")
+                if link:
+                    message += f"\n\nWatch video: {link}"
+
+        except Exception as e:
+            logger.warning(f"Video processing failed: {e}, falling back to image/text post")
+            if link:
+                message += f"\n\nWatch video: {link}"
+
+    # If we have an IMAGE URL (original functionality)
     if image_url:
         try:
             # Download the image
@@ -933,7 +1076,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, link=No
                         "scheduled_time_final": scheduled_timestamp,
                         "message": message,
                         "published": payload.get("published"),
-                        "has_image": True
+                        "media_type": "image"
                     }
                     
                     return result
@@ -976,13 +1119,13 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, link=No
         "scheduled_time_final": scheduled_timestamp,
         "message": message,
         "published": payload.get("published"),
-        "has_image": False
+        "media_type": "text_only"
     }
 
     return data
 
 # --------------------------------------------------------------------
-# DB INSERTION (keep the same as before)
+# DB INSERTION - UPDATED FOR VIDEO SUPPORT
 # --------------------------------------------------------------------
 def get_existing_urls(session):
     """Get all existing URLs to avoid duplicates"""
@@ -1004,7 +1147,7 @@ def insert_articles(session, articles, dry_run=False):
     existing_hashes = get_existing_hashes(session)
     
     if not isinstance(articles, list):
-        logger.error(f"Scraper {source_name} returned non-list: {type(results)}")
+        logger.error(f"Scraper returned non-list: {type(articles)}")
         articles = []
 
     normalized = [normalize_article(a) for a in articles]
@@ -1042,6 +1185,7 @@ def insert_articles(session, articles, dry_run=False):
             summary=a["summary"],
             url=a["url"],
             image_url=a["image_url"],
+            video_url=a["video_url"],
             source=a["source"],
             published_at=datetime.now(timezone.utc),
             seq=next_seq,
@@ -1057,7 +1201,9 @@ def insert_articles(session, articles, dry_run=False):
             "seq": next_seq,
             "title": a["title"],
             "url": a["url"],
-            "source": a["source"]
+            "source": a["source"],
+            "image_url": a["image_url"],
+            "video_url": a["video_url"]
         })
 
         next_seq += 1
@@ -1073,7 +1219,7 @@ def get_max_seq(session):
     return int(r) if r else 0
 
 # --------------------------------------------------------------------
-# MAIN RUNNER - UPDATED WITH FIFA
+# MAIN RUNNER
 # --------------------------------------------------------------------
 def run_scraper(dry_run=False):
     logger.info("Starting football scraper (dry_run=%s)", dry_run)
@@ -1124,12 +1270,11 @@ def run_scraper(dry_run=False):
 
     logger.info("Total scraped candidate articles: %d", len(all_articles))
 
-    # Enhanced missing image detection
-    missing_images = check_missing_images(all_articles)
-    if missing_images:
-        logger.warning("🚨 Found %d articles without images that need manual attention", len(missing_images))
-        logger.warning("📋 Visit http://your-domain.com/admin/posts-without-images to add images")
-        for article in missing_images:
+    # Enhanced missing media detection
+    missing_media = check_missing_media(all_articles)
+    if missing_media:
+        logger.warning("🚨 Found %d articles without images/videos that need manual attention", len(missing_media))
+        for article in missing_media:
             logger.warning("   - %s: %s", article['title'], article['url'])
 
     with app.app_context():
@@ -1165,14 +1310,23 @@ def run_scraper(dry_run=False):
         scheduled_count = schedule_new_posts(session, dry_run=dry_run)
         logger.info("Scheduled %d posts", scheduled_count)
 
-        # Final report with admin link
-        missing_count = len([p for p in inserted if not p.get('image_url')])
-        if missing_count > 0 and not dry_run:
-            logger.warning("📋 ADMIN: %d new posts need images. Visit: /admin/posts-without-images", missing_count)
+        # Final report with media statistics
+        video_count = len([p for p in inserted if p.get('video_url')])
+        image_count = len([p for p in inserted if p.get('image_url') and not p.get('video_url')])
+        no_media_count = len([p for p in inserted if not p.get('image_url') and not p.get('video_url')])
+        
+        logger.info("📊 Media Statistics:")
+        logger.info("   - Videos: %d", video_count)
+        logger.info("   - Images: %d", image_count)
+        logger.info("   - No media: %d", no_media_count)
+
+        if no_media_count > 0 and not dry_run:
+            logger.warning("📋 ADMIN: %d new posts need media. Visit: /admin/posts-without-images", no_media_count)
 
         if dry_run:
             for i in inserted:
-                logger.info("DRY: seq=%s title=%s url=%s", i["seq"], i["title"], i["url"])
+                media_type = "video" if i.get('video_url') else "image" if i.get('image_url') else "no media"
+                logger.info("DRY: seq=%s title=%s url=%s media=%s", i["seq"], i["title"], i["url"], media_type)
 
     logger.info("Football scraper run complete.")
     

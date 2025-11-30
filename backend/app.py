@@ -514,9 +514,11 @@ def birthday_posts():
         results = []
 
         # --- Step 2: Filter Film/TV personalities ---
-        film_keywords = [
-            "actor", "actress", "film", "television", "tv", "cinema",
-            "director", "producer", "filmmaker", "show", "drama"
+        football_keywords = [
+            "footballer", "football player", "soccer", "striker",
+            "midfielder", "forward", "defender", "goalkeeper", "winger",
+            "national team", "club", "premier league", "la liga",
+            "bundesliga", "serie a", "ligue 1", "fifa", "uefa",
         ]
 
         for person in births:
