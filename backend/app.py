@@ -221,12 +221,64 @@ def publish_post(post_id):
     db.session.commit()
     return jsonify(post.serialize())
 
+def auto_fetch_news():
+    """Background task to fetch news automatically every 4 hours"""
+    with app.app_context():
+        try:
+            print("🔄 Auto-fetching news...")
+            new_count = 0
+            
+            # Import inside function to avoid circular imports
+            from rss_feeds import RSS_FEEDS
+            
+            for feed_url in RSS_FEEDS:
+                feed = feedparser.parse(feed_url)
+                for entry in feed.entries[:5]:  # limit 5 per feed
+                    if Post.query.filter_by(title=entry.title).first():
+                        continue
+
+                    image_url = get_main_image(entry.link)
+                    summary = entry.get("summary", "")
+                    img_path = generate_post_image_nocrop("", image_url, entry.link, summary, add_title=False)
+                    
+                    if not img_path:
+                        print(f"⚠️ Skipped {entry.title} due to missing image")
+                        continue
+                    
+                    hashtags = generate_hashtags(entry.title, summary)
+
+                    post = Post(
+                        title=entry.title,
+                        link=entry.link,
+                        summary=summary,
+                        full_description=summary,
+                        image=img_path,
+                        hashtags=",".join(hashtags),  # Changed to comma for consistency
+                        status="draft",
+                    )
+                    db.session.add(post)
+                    new_count += 1
+
+            db.session.commit()
+            print(f"✅ Auto-fetched {new_count} new posts at {datetime.now()}")
+            return new_count  # Return count for logging
+            
+        except Exception as e:
+            print(f"🔥 ERROR in auto_fetch_news: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return 0
+
+
 @app.route("/fetch_news", methods=["POST"])
 def fetch_news():
-    """Fetch football news from RSS feeds and save as draft posts."""
+    """Fetch football news from RSS feeds and save as draft posts.
+    Can be called from frontend or background scheduler."""
     from rss_feeds import RSS_FEEDS
 
     new_posts = []
+    new_count = 0
+    
     for feed_url in RSS_FEEDS:
         feed = feedparser.parse(feed_url)
         for entry in feed.entries[:5]:  # limit 5 per feed
@@ -240,6 +292,7 @@ def fetch_news():
             if not img_path:
                 print(f"⚠️ Skipped {entry.title} due to missing image")
                 continue  # skip this entry
+            
             hashtags = generate_hashtags(entry.title, summary)
 
             post = Post(
@@ -253,53 +306,18 @@ def fetch_news():
             )
             db.session.add(post)
             new_posts.append(post)
+            new_count += 1
 
     db.session.commit()
-    return jsonify([p.serialize() for p in new_posts])
-
-# ---------------- Auto Fetch News ---------------- #
-def auto_fetch_news():
-        """Background task to fetch news automatically every 4 hours"""
-        with app.app_context():
-            try:
-                print("🔄 Auto-fetching news...")
-                articles = fetch_news()
-                new_count = 0
-                if not isinstance(articles, list):
-                    logger.error(f"Scraper returned non-list: {type(articles)}")
-                    articles = []
-
-                for a in articles:
-                    if Post.query.filter_by(title=a["title"]).first():
-                        continue  # Skip duplicates
-
-                    img_path = generate_post_image_nocrop("", a["image_url"], a["url"], a["summary"], add_title=False)
-                    if not img_path:
-                        print(f"⚠️ Skipped {a['title']} due to missing image")
-                        continue
-
-                    hashtags = " ".join(generate_hashtags(a["title"], a["summary"]))
-
-                    post = Post(
-                        title=a["title"],
-                        link=a["url"],
-                        summary=a["summary"],
-                        full_description=a["summary"],
-                        image=img_path,
-                        hashtags=hashtags,
-                        status="draft",
-                    )
-                    db.session.add(post)
-                    new_count += 1
-
-                db.session.commit()
-                print(f"✅ Auto-fetched {new_count} new posts at {datetime.now()}")
-                
-            except Exception as e:
-                print(f"🔥 ERROR in auto_fetch_news: {str(e)}")
-                import traceback
-                traceback.print_exc()
-
+    
+    # Return a consistent response for both API calls
+    return jsonify({
+        "status": "success",
+        "message": f"Fetched {new_count} new posts",
+        "new_posts": [p.serialize() for p in new_posts],
+        "count": new_count
+    })
+    
 # ---------------- Manual Upload Endpoint ---------------- #
 
 @app.route("/upload_manual_post", methods=["POST"])
