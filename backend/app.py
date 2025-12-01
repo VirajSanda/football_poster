@@ -239,7 +239,7 @@ def auto_fetch_news():
 
                     image_url = get_main_image(entry.link)
                     summary = entry.get("summary", "")
-                    img_path = generate_post_image_nocrop("", image_url, entry.link, summary, add_title=False)
+                    img_path = generate_post_image_nocrop("", image_url, entry.link, summary)
                     
                     if not img_path:
                         print(f"⚠️ Skipped {entry.title} due to missing image")
