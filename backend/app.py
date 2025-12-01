@@ -90,6 +90,10 @@ with app.app_context():
         import traceback
         traceback.print_exc()
 
+# Logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("football-scraper")
+
 # ---------------- Helpers ---------------- #
 def get_main_image(article_url: str):
     """Try to extract a main image from an article page."""
