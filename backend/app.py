@@ -266,7 +266,7 @@ def auto_fetch_news():
                 articles = fetch_news()
                 new_count = 0
                 if not isinstance(articles, list):
-                    logger.error(f"Scraper {source_name} returned non-list: {type(articles)}")
+                    logger.error(f"Scraper returned non-list: {type(articles)}")
                     articles = []
 
                 for a in articles:
