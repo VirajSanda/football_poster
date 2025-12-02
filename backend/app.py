@@ -114,6 +114,39 @@ def get_main_image(article_url: str):
     except Exception as e:
         print("[ERROR] get_main_image:", e)
     return None
+
+def download_image_as_bytes(image_url):
+    """Download image and return as bytes."""
+    try:
+        if not image_url:
+            return None
+            
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(image_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Convert to JPEG bytes
+        img = Image.open(io.BytesIO(response.content))
+        
+        # Convert to RGB if necessary
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = background
+        
+        # Convert to bytes
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG', quality=85)
+        img_byte_arr = img_byte_arr.getvalue()
+        
+        return img_byte_arr
+        
+    except Exception as e:
+        print(f"❌ Error downloading image: {e}")
+        return None
+
 # ---------------- Routes ---------------- #
 
 @app.route("/posts", methods=["GET"])
@@ -154,11 +187,12 @@ def create_post():
     if not title:
         return jsonify({"error": "Title is required"}), 400
 
-    img_path = generate_post_image(title, image_url, article_url, summary)
+    # Download image as binary data (updated function)
+    image_data, filename = download_image_as_bytes_with_filename(image_url)
     
-    if not img_path:
-        print(f"⚠️ Skipped {entry.title} due to missing image")
-        return jsonify({"error": "Failed to generate post image"}), 500
+    if not image_data:
+        return jsonify({"error": "Failed to download or process image"}), 500
+    
     hashtags = generate_hashtags(title, summary)
 
     post = Post(
@@ -166,7 +200,11 @@ def create_post():
         link=article_url,
         summary=summary,
         full_description=full_description,
-        image=img_path,
+        # Store binary data
+        image_data=image_data,
+        image_filename=filename,
+        # Keep old field for backward compatibility
+        image=f"/image/{Post.query.count() + 1}",  # Approximate URL
         hashtags=",".join(hashtags),
         status="draft",
     )
@@ -174,6 +212,43 @@ def create_post():
     db.session.commit()
 
     return jsonify(post.serialize()), 201
+
+def download_image_as_bytes_with_filename(image_url):
+    """Download image and return bytes with filename"""
+    try:
+        if not image_url:
+            return None, None
+            
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(image_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Extract filename from URL or generate one
+        filename = os.path.basename(image_url).split('?')[0]
+        if not filename or '.' not in filename:
+            filename = f"{uuid4().hex}.jpg"
+        
+        # Open and process image
+        img = Image.open(io.BytesIO(response.content))
+        
+        # Convert to RGB if needed
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = background
+        
+        # Convert to JPEG bytes
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG', quality=85)
+        img_bytes = img_byte_arr.getvalue()
+        
+        return img_bytes, filename
+        
+    except Exception as e:
+        print(f"❌ Error downloading image: {e}")
+        return None, None
 
 @app.route("/approve/<int:post_id>", methods=["POST"])
 def approve_post(post_id):
@@ -185,11 +260,14 @@ def approve_post(post_id):
         post.status = "approved"
         db.session.commit()
 
+        # Get image data for Facebook
+        image_data = post.get_image_data()
+        
         fb_result = post_to_facebook(
             title=post.title,
             summary=post.summary,
             hashtags=post.hashtags.split(",") if post.hashtags else [],
-            image_path=post.image if post.image else None
+            image_data=image_data  # Pass binary data instead of path
         )
 
         return jsonify({
@@ -272,8 +350,7 @@ def auto_fetch_news():
 
 @app.route("/fetch_news", methods=["POST"])
 def fetch_news():
-    """Fetch football news from RSS feeds and save as draft posts.
-    Can be called from frontend or background scheduler."""
+    """Fetch football news from RSS feeds and save as draft posts."""
     from rss_feeds import RSS_FEEDS
 
     new_posts = []
@@ -281,18 +358,20 @@ def fetch_news():
     
     for feed_url in RSS_FEEDS:
         feed = feedparser.parse(feed_url)
-        for entry in feed.entries[:5]:  # limit 5 per feed
+        for entry in feed.entries[:5]:
             if Post.query.filter_by(title=entry.title).first():
                 continue
 
             image_url = get_main_image(entry.link)
             summary = entry.get("summary", "")
-            img_path = generate_post_image(entry.title, image_url, entry.link, summary)
             
-            if not img_path:
+            # Get image binary data instead of file path
+            image_data = download_image_as_bytes(image_url)
+            
+            if not image_data:
                 print(f"⚠️ Skipped {entry.title} due to missing image")
-                continue  # skip this entry
-            
+                continue
+                
             hashtags = generate_hashtags(entry.title, summary)
 
             post = Post(
@@ -300,7 +379,8 @@ def fetch_news():
                 link=entry.link,
                 summary=summary,
                 full_description=summary,
-                image=img_path,
+                image_data=image_data,  # Store binary data
+                image_filename=f"{uuid4().hex}.jpg",  # Keep filename for reference
                 hashtags=",".join(hashtags),
                 status="draft",
             )
@@ -310,14 +390,23 @@ def fetch_news():
 
     db.session.commit()
     
-    # Return a consistent response for both API calls
     return jsonify({
         "status": "success",
         "message": f"Fetched {new_count} new posts",
         "new_posts": [p.serialize() for p in new_posts],
         "count": new_count
     })
+
+# Add this route to serve images from database
+@app.route('/image/<int:post_id>')
+def get_image(post_id):
+    """Serve image from database."""
+    post = Post.query.get_or_404(post_id)
+    if not post.image_data:
+        return jsonify({"error": "Image not found"}), 404
     
+    return Response(post.image_data, mimetype='image/jpeg')
+
 # ---------------- Manual Upload Endpoint ---------------- #
 
 @app.route("/upload_manual_post", methods=["POST"])

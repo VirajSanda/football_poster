@@ -1,5 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from sqlalchemy import LargeBinary
+import json
 
 db = SQLAlchemy()
 
@@ -10,7 +12,10 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
     link = db.Column(db.String(500))
-    image = db.Column(db.String(255))
+    image = db.Column(db.String(255))  # Keep for backward compatibility or remove
+    image_data = db.Column(LargeBinary, nullable=True)  # Add this for storing binary image data
+    image_filename = db.Column(db.String(255), nullable=True)  # Optional: store original filename
+    image_mimetype = db.Column(db.String(50), nullable=True)  # Optional: store MIME type
     summary = db.Column(db.Text)
     full_description = db.Column(db.Text)
     hashtags = db.Column(db.String(500))
@@ -22,13 +27,40 @@ class Post(db.Model):
             "id": self.id,
             "title": self.title,
             "link": self.link,
-            "image": self.image,
+            "image": self.get_image_url(),  # Use helper method
             "summary": self.summary,
             "full_description": self.full_description,
             "hashtags": self.hashtags.split(",") if self.hashtags else [],
             "status": self.status,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+    
+    def get_image_url(self):
+        """Get image URL - supports both old and new storage"""
+        if self.image_data:
+            # New storage: use database endpoint
+            return f"/image/{self.id}"
+        elif self.image and os.path.exists(self.image):
+            # Old storage: use file path
+            # Convert to URL-friendly path
+            if self.image.startswith('static/'):
+                return url_for('static', filename=self.image[7:])
+            return self.image
+        else:
+            # Fallback
+            return "/static/images/placeholder.jpg"
+    
+    def get_image_data(self):
+        """Get image binary data - supports both old and new storage"""
+        if self.image_data:
+            return self.image_data
+        elif self.image and os.path.exists(self.image):
+            try:
+                with open(self.image, 'rb') as f:
+                    return f.read()
+            except:
+                return None
+        return None
 
 class TelePost(db.Model):
     __tablename__ = "tele_posts"
