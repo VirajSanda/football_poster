@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 from models import db, FootballNews
 from config import Config
 from app import app
+import pytz
 
 # Facebook Config (add to your .env)
 FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID
@@ -789,21 +790,16 @@ def check_missing_media(articles):
 # --------------------------------------------------------------------
 # SCHEDULING LOGIC
 # --------------------------------------------------------------------
-def get_next_schedule_time(start_time=None, hour_interval=2):
-    """Calculate next posting time with 2-hour gaps (as requested)"""
-    if start_time is None:
-        start_time = datetime.now(timezone.utc)
+def get_next_schedule_time():
+    """Get the next schedule time (make sure it's timezone aware)"""
+    # Ensure returning timezone-aware datetime
+    now = datetime.now(timezone.utc)
     
-    # Round to next hour
-    next_time = start_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    # Round up to the next even hour
+    next_hour = (now + timedelta(hours=2)).replace(minute=0, second=0, microsecond=0)
     
-    # Ensure it's at least 10 minutes ahead for Facebook
-    if next_time < datetime.now(timezone.utc) + timedelta(minutes=10):
-        next_time = datetime.now(timezone.utc) + timedelta(minutes=11)
-        # Round to next hour
-        next_time = next_time.replace(minute=0, second=0, microsecond=0)
-    
-    return next_time
+    return next_hour  # Already timezone-aware since now is timezone-aware
+
 
 def schedule_new_posts(session, dry_run=False):
     """Schedule posts with enhanced duplicate checking and media detection"""
@@ -829,14 +825,25 @@ def schedule_new_posts(session, dry_run=False):
         ).order_by(FootballNews.scheduled_time.desc()).first()
         
         if last_scheduled:
-            next_time = last_scheduled[0] + timedelta(hours=2)  # 2-hour intervals
+            last_time = last_scheduled[0]
+            # Ensure last_time is timezone aware
+            if last_time.tzinfo is None:
+                last_time = last_time.replace(tzinfo=timezone.utc)
+            next_time = last_time + timedelta(hours=2)  # 2-hour intervals
         else:
             next_time = get_next_schedule_time()
         
-        # Ensure next_time is in future
+        # Ensure next_time is timezone aware
+        if next_time.tzinfo is None:
+            next_time = next_time.replace(tzinfo=timezone.utc)
+        
+        # Ensure next_time is in future (use timezone-aware comparison)
         now = datetime.now(timezone.utc)
         if next_time <= now:
             next_time = get_next_schedule_time()
+            # Ensure get_next_schedule_time returns timezone-aware datetime
+            if next_time.tzinfo is None:
+                next_time = next_time.replace(tzinfo=timezone.utc)
         
         scheduled_count = 0
         
@@ -862,6 +869,11 @@ def schedule_new_posts(session, dry_run=False):
             
             # Schedule Facebook post with media (video takes priority over image)
             if not dry_run:
+                # Ensure scheduled_time is timezone aware
+                scheduled_time = next_time
+                if scheduled_time.tzinfo is None:
+                    scheduled_time = scheduled_time.replace(tzinfo=timezone.utc)
+                
                 result = post_to_facebook_scheduled(
                     title=post.title,
                     summary=summary,
@@ -869,18 +881,19 @@ def schedule_new_posts(session, dry_run=False):
                     image_url=post.image_url,
                     video_url=post.video_url,
                     link=post.url,
-                    scheduled_time=next_time
+                    scheduled_time=scheduled_time
                 )
                 
                 if "id" in result:
+                    # Ensure storing timezone-aware datetime to database
+                    post.scheduled_time = scheduled_time
+                    
                     if post.video_url:
                         logger.info("✅ Scheduled video post: %s for %s", post.title, next_time)
                     elif not post.image_url:
                         logger.warning("✅ Scheduled post WITHOUT MEDIA: %s for %s", post.title, next_time)
                     else:
                         logger.info("✅ Scheduled Facebook post with image: %s for %s", post.title, next_time)
-                    # Mark as scheduled in database
-                    post.scheduled_time = next_time
                 else:
                     logger.error("❌ Failed to schedule Facebook post: %s", result.get("error", "Unknown error"))
             
@@ -888,6 +901,9 @@ def schedule_new_posts(session, dry_run=False):
             
             # Move to next time slot (2-hour gap as requested)
             next_time = next_time + timedelta(hours=2)
+            # Ensure next_time remains timezone aware
+            if next_time.tzinfo is None:
+                next_time = next_time.replace(tzinfo=timezone.utc)
         
         if not dry_run:
             session.commit()
@@ -896,11 +912,11 @@ def schedule_new_posts(session, dry_run=False):
         return scheduled_count
         
     except Exception as e:
-        logger.error("Error scheduling posts: %s", e)
+        logger.error("Error scheduling posts: %s", e, exc_info=True)
         if not dry_run:
             session.rollback()
         return 0
-        
+       
 def get_hashtags_for_source(source):
     """Generate relevant hashtags based on source"""
     base_hashtags = "#Football #Soccer #FootyNews"
@@ -919,6 +935,14 @@ def get_hashtags_for_source(source):
     else:
         return base_hashtags
 
+def ensure_timezone_aware(dt_obj):
+    """Ensure datetime object is timezone aware (UTC)"""
+    if dt_obj is None:
+        return None
+    if dt_obj.tzinfo is None:
+        return dt_obj.replace(tzinfo=timezone.utc)
+    return dt_obj
+    
 # --------------------------------------------------------------------
 # FACEBOOK INTEGRATION - UPDATED FOR VIDEO SUPPORT
 # --------------------------------------------------------------------
