@@ -24,6 +24,10 @@ from config import Config
 import threading
 import time
 import logging
+from PIL import Image, ImageDraw, ImageFont
+import io
+from uuid import uuid4
+
 # ---------------- Load Environment Variables ---------------- #
 load_dotenv()
 # ---------------- App Setup ---------------- #
