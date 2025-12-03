@@ -89,151 +89,222 @@ HEADERS = {
 }
 
 # --------------------------------------------------------------------
-# PREMIER LEAGUE OFFICIAL SITE - IMPROVED VERSION
+# PREMIER LEAGUE OFFICIAL API
 # --------------------------------------------------------------------
-def scrape_premier_league():
-    """Scrape official Premier League news - IMPROVED SELECTORS"""
-    urls = [
-        "https://www.premierleague.com/news",
-        "https://www.premierleague.com/news?page=1",
-        "https://www.premierleague.com/news?page=2"
+def fetch_premier_league_api():
+    """Fetch Premier League content from official API"""
+    logger.info("Fetching Premier League API...")
+    
+    # API configurations for different content types
+    api_configs = [
+        {
+            "name": "general",
+            "url": "https://api.premierleague.com/content/premierleague/en",
+            "params": {
+                "contentTypes": "TEXT,VIDEO",
+                "offset": 0,
+                "limit": 15,
+                "onlyRestrictedContent": "false",
+                "detail": "DETAILED"
+            }
+        },
+        {
+            "name": "fantasy",
+            "url": "https://api.premierleague.com/content/premierleague/en",
+            "params": {
+                "contentTypes": "TEXT",
+                "offset": 0,
+                "limit": 10,
+                "onlyRestrictedContent": "false",
+                "tagNames": "label:Fantasy%20Premier%20League",
+                "detail": "DETAILED"
+            }
+        },
+        {
+            "name": "youth",
+            "url": "https://api.premierleague.com/content/premierleague/en",
+            "params": {
+                "contentTypes": "TEXT",
+                "offset": 0,
+                "limit": 10,
+                "onlyRestrictedContent": "false",
+                "tagNames": "label:Youth",
+                "detail": "DETAILED"
+            }
+        }
     ]
     
-    logger.info("Scraping Premier League news...")
     all_results = []
     
-    for url in urls:
+    for config in api_configs:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=15)
+            response = requests.get(
+                config["url"],
+                params=config["params"],
+                headers=HEADERS,
+                timeout=15
+            )
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.text, 'html.parser')
-            results = []
-            
-            # Multiple selector strategies for Premier League
-            selectors = [
-                'a[href*="/news/"]',
-                '.newsArticle',
-                '.article',
-                '.news-item',
-                '.news-list__item',
-                '[data-component="news-article"]',
-                '.news-card',
-                '.card--news'
-            ]
-            
-            articles = []
-            for selector in selectors:
-                found = soup.select(selector)
-                articles.extend(found)
-                if found:
-                    logger.debug(f"Found {len(found)} articles with selector: {selector}")
-            
-            # Remove duplicates by URL
-            seen_urls = set()
-            for article in articles:
-                try:
-                    # Get URL first
-                    href = article.get('href', '')
-                    if not href and article.find('a'):
-                        href = article.find('a').get('href', '')
-                    
-                    if not href or href in seen_urls:
-                        continue
-                    
-                    seen_urls.add(href)
-                    
-                    # Get title
-                    title = ""
-                    title_selectors = ['h1', 'h2', 'h3', 'h4', '.title', '.headline', '.newsArticle__title']
-                    for title_sel in title_selectors:
-                        title_el = article.select_one(title_sel)
-                        if title_el:
-                            title = title_el.get_text(strip=True)
-                            if title:
-                                break
-                    
-                    if not title and article.get_text(strip=True):
-                        title = article.get_text(strip=True)
-                    
-                    if not title or len(title) < 10:
-                        continue
-                    
-                    # Filter out non-football content
-                    if not looks_like_football(title, "", href):
-                        continue
-                    
-                    # Construct full URL
-                    if href.startswith('/'):
-                        href = f"https://www.premierleague.com{href}"
-                    elif not href.startswith('http'):
-                        continue
-                    
-                    # Extract summary
-                    summary = ""
-                    summary_selectors = ['p', '.summary', '.excerpt', '.description', '.newsArticle__summary']
-                    for summary_sel in summary_selectors:
-                        summary_el = article.select_one(summary_sel)
-                        if summary_el:
-                            summary = summary_el.get_text(strip=True)
-                            if summary:
-                                break
-                    
-                    # Extract image
-                    image_url = None
-                    img_el = article.find('img')
-                    if img_el:
-                        image_url = img_el.get('src') or img_el.get('data-src') or img_el.get('data-lazy')
-                        if image_url:
-                            if image_url.startswith('//'):
-                                image_url = 'https:' + image_url
-                            elif image_url.startswith('/'):
-                                image_url = f"https://www.premierleague.com{image_url}"
-                    
-                    # Extract video (if available)
-                    video_url = None
-                    video_selectors = ['video', 'iframe[src*="youtube"]', 'iframe[src*="vimeo"]', '[data-video-url]']
-                    for video_sel in video_selectors:
-                        video_el = article.select_one(video_sel)
-                        if video_el:
-                            video_url = video_el.get('src') or video_el.get('data-src') or video_el.get('data-video-url')
-                            if video_url:
-                                if video_url.startswith('//'):
-                                    video_url = 'https:' + video_url
-                                elif video_url.startswith('/'):
-                                    video_url = f"https://www.premierleague.com{video_url}"
-                                break
-                    
-                    results.append({
-                        "title": title[:300],  # Limit title length
-                        "summary": summary[:500],  # Limit summary length
-                        "url": href,
-                        "image_url": image_url,
-                        "video_url": video_url,
-                        "source": "Premier League"
-                    })
-                    
-                except Exception as e:
-                    logger.debug("Error processing Premier League article: %s", e)
-                    continue
-            
+            data = response.json()
+            results = _process_api_data(data, config["name"])
             all_results.extend(results)
-            logger.info("Found %d Premier League items from %s", len(results), url)
+            
+            logger.info("Found %d Premier League API items from %s", len(results), config["name"])
             
         except Exception as e:
-            logger.error("Premier League scrape failed for %s: %s", url, e)
+            logger.error("Premier League API fetch failed for %s: %s", config["name"], e)
             continue
     
-    # Remove duplicates across all URLs
-    unique_results = []
+    # Remove duplicates
+    unique_results = _deduplicate_api_results(all_results)
+    logger.info("Total unique Premier League API items: %d", len(unique_results))
+    
+    return unique_results[:20]  # Return top 20
+    
+# --------------------------------------------------------------------
+# PREMIER LEAGUE OFFICIAL SITE - IMPROVED VERSION
+# --------------------------------------------------------------------
+
+def _process_api_data(data: Dict, source_name: str) -> List[Dict]:
+    """Process API JSON response into normalized articles"""
+    results = []
+    
+    if not data or "content" not in data:
+        return results
+    
+    for item in data.get("content", []):
+        try:
+            # Only process text content
+            if item.get("type") != "text":
+                continue
+            
+            # Extract and normalize fields
+            title = (item.get("title") or "").strip()
+            summary = (item.get("summary") or item.get("description") or "").strip()
+            
+            # Skip if title too short
+            if len(title) < 10:
+                continue
+            
+            # Check if football content using your existing function
+            if not looks_like_football(title, summary, ""):
+                continue
+            
+            # Get URL
+            url = item.get("hotlinkUrl", "")
+            if not url and item.get("titleUrlSegment"):
+                url = f"https://www.premierleague.com/news/{item['titleUrlSegment']}"
+            
+            if not url:
+                continue
+            
+            # Get image URL
+            image_url = None
+            if item.get("leadMedia"):
+                image_url = item.get("leadMedia", {}).get("url")
+            if not image_url:
+                image_url = item.get("imageUrl")
+            
+            # Get video URL if available
+            video_url = item.get("onDemandUrl")
+            
+            # Create normalized article using your existing function
+            article_data = {
+                "title": title[:300],
+                "summary": summary[:500],
+                "url": url,
+                "image_url": image_url,
+                "video_url": video_url,
+                "source": f"Premier League ({source_name.title()})"
+            }
+            
+            normalized_article = normalize_article(article_data)
+            results.append(normalized_article)
+            
+        except Exception as e:
+            logger.debug("Error processing Premier League API item: %s", e)
+            continue
+    
+    return results
+
+def _deduplicate_api_results(results: List[Dict]) -> List[Dict]:
+    """Remove duplicate API results by URL"""
     seen_urls = set()
-    for result in all_results:
-        if result['url'] not in seen_urls:
-            seen_urls.add(result['url'])
+    unique_results = []
+    
+    for result in results:
+        url = result.get("url", "")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
             unique_results.append(result)
     
-    logger.info("Total unique Premier League items: %d", len(unique_results))
-    return unique_results[:20]  # Return top 20
+    return unique_results
+
+# --------------------------------------------------------------------
+# ENHANCED MAIN FUNCTION (combines API and scraping)
+# --------------------------------------------------------------------
+def scrape_premier_league_enhanced() -> List[Dict]:
+    """
+    Enhanced Premier League scraper that combines:
+    1. Web scraping (your existing method)
+    2. Official API (new method)
+    
+    Returns: List of normalized article dictionaries
+    """
+    all_articles = []
+    
+    logger.info("Starting enhanced Premier League content collection...")
+    
+    # 2. Get content from official API (new method)
+    try:
+        api_articles = fetch_premier_league_api()
+        logger.info("Fetched %d articles from API", len(api_articles))
+        all_articles.extend(api_articles)
+    except Exception as e:
+        logger.error("API fetching failed: %s", e)
+    
+    # 3. Remove duplicates across both sources
+    unique_articles = _remove_all_duplicates(all_articles)
+    
+    # 4. Check for missing media
+    check_missing_media(unique_articles)
+    
+    logger.info("Enhanced collection complete: %d unique articles", len(unique_articles))
+    return unique_articles[:30]  # Return top 30
+
+def _remove_all_duplicates(articles: List[Dict]) -> List[Dict]:
+    """Remove duplicates by URL and title similarity"""
+    seen_urls = set()
+    seen_titles = set()
+    unique_articles = []
+    
+    for article in articles:
+        url = article.get("url", "")
+        title = article.get("title", "").lower().strip()
+        
+        # Check both exact URL and title similarity
+        is_duplicate = False
+        
+        # Check URL
+        if url in seen_urls:
+            is_duplicate = True
+        
+        # Check title similarity (first 5 words)
+        title_words = set(title.split()[:5])
+        for seen_title in seen_titles:
+            seen_words = set(seen_title.split()[:5])
+            common_words = title_words.intersection(seen_words)
+            if len(common_words) >= 3:  # 3+ common words in first 5
+                is_duplicate = True
+                break
+        
+        if not is_duplicate:
+            seen_urls.add(url)
+            seen_titles.add(title)
+            unique_articles.append(article)
+    
+    return unique_articles
 
 # --------------------------------------------------------------------
 # FIFA NEWS SCRAPER
@@ -1251,9 +1322,10 @@ def run_scraper(dry_run=False):
 
     # Scrape all football sources
     try:
-        results = scrape_premier_league()
+        # CHANGE THIS LINE ONLY - Use enhanced API + scraping
+        results = scrape_premier_league_enhanced()  # <-- Changed here
         all_articles.extend(results)
-        logger.info("Premier League: %d articles", len(results))
+        logger.info("Premier League: %d articles (API+Scraping)", len(results))
     except Exception as e:
         logger.exception("Premier League failed: %s", e)
 

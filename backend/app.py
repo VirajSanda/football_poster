@@ -3,7 +3,7 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, Response
 from flask_cors import CORS
 from datetime import datetime, timezone, timedelta
 from werkzeug.utils import secure_filename
@@ -436,58 +436,33 @@ def fetch_news():
     })
 
 # Add this route to serve images from database
+import traceback
+
 @app.route('/image/<int:post_id>')
 def get_image(post_id):
-    """Serve image from database."""
     try:
         post = Post.query.get(post_id)
-        
         if not post:
             return jsonify({"error": "Post not found"}), 404
-        
-        # Try to get image data
-        image_data = None
-        
-        # First try the new binary storage
-        if post.image_data:
-            image_data = post.image_data
-        # Fallback to old file storage
-        elif post.image:
-            # Clean up the path
-            clean_path = post.image.strip()
-            
-            # Remove leading slashes to make it relative
-            while clean_path.startswith('/'):
-                clean_path = clean_path[1:]
-            
-            # Try to read the file if it exists
-            if os.path.exists(clean_path):
-                try:
-                    with open(clean_path, 'rb') as f:
-                        image_data = f.read()
-                except Exception as e:
-                    print(f"Error reading file {clean_path}: {e}")
-                    # Continue to return 404
-            else:
-                print(f"Image file not found: {clean_path}")
-        
-        if image_data:
-            return Response(
-                image_data, 
-                mimetype='image/jpeg',
-                headers={
-                    'Content-Disposition': f'inline; filename="{post.image_filename or f"post_{post_id}.jpg"}"',
-                    'Cache-Control': 'public, max-age=86400'
-                }
-            )
-        else:
-            # No image data found - return 404
+
+        if not post.image_data:
             return jsonify({"error": "Image not found"}), 404
-            
+
+        image_data = post.image_data  # no decoding
+
+        return Response(
+            image_data,
+            mimetype='image/jpeg',
+            headers={
+                'Content-Disposition': f'inline; filename="{post.image_filename or f"post_{post_id}.jpg"}"',
+                'Cache-Control': 'public, max-age=86400'
+            }
+        )
     except Exception as e:
-        print(f"Error in get_image endpoint: {e}")
+        print("❌ ERROR in /image route:", e)
+        traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
-        
+
 # Add a simple placeholder creation endpoint
 @app.route('/create_placeholder')
 def create_placeholder():
