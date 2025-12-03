@@ -14,22 +14,22 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
     link = db.Column(db.String(500))
-    image = db.Column(db.String(255))  # Keep for backward compatibility or remove
-    image_data = db.Column(LargeBinary, nullable=True)  # Add this for storing binary image data
-    image_filename = db.Column(db.String(255), nullable=True)  # Optional: store original filename
-    image_mimetype = db.Column(db.String(50), nullable=True)  # Optional: store MIME type
+    image = db.Column(db.String(255))  # Keep for backward compatibility
+    image_data = db.Column(db.LargeBinary, nullable=True)  # Binary image data
+    image_filename = db.Column(db.String(255), nullable=True)
     summary = db.Column(db.Text)
     full_description = db.Column(db.Text)
     hashtags = db.Column(db.String(500))
-    status = db.Column(db.String(20), default="draft")  # draft, approved, published
+    status = db.Column(db.String(20), default="draft")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def serialize(self):
+        """Return serialized post data"""
         return {
             "id": self.id,
             "title": self.title,
             "link": self.link,
-            "image": self.get_image_url(),  # Use helper method
+            "image": self.get_image_url(),  # Use dynamic URL
             "summary": self.summary,
             "full_description": self.full_description,
             "hashtags": self.hashtags.split(",") if self.hashtags else [],
@@ -38,31 +38,26 @@ class Post(db.Model):
         }
     
     def get_image_url(self):
-        """Get image URL - supports both old and new storage"""
-        if self.image_data:
-            # New storage: use database endpoint
-            return f"/image/{self.id}"
-        elif self.image and os.path.exists(self.image):
-            # Old storage: use file path
-            # Convert to URL-friendly path
-            if self.image.startswith('static/'):
-                return url_for('static', filename=self.image[7:])
-            return self.image
-        else:
-            # Fallback
-            return "/static/images/placeholder.jpg"
+        """Get image URL - works with both old and new storage"""
+        # New method: use /image/{id} endpoint
+        return f"/image/{self.id}"
     
     def get_image_data(self):
-        """Get image binary data - supports both old and new storage"""
+        """Get image binary data"""
+        # First try image_data (new storage)
         if self.image_data:
             return self.image_data
-        elif self.image and os.path.exists(self.image):
+        
+        # Fallback: try to read from file path (old storage)
+        if self.image and os.path.exists(self.image):
             try:
                 with open(self.image, 'rb') as f:
                     return f.read()
-            except:
-                return None
+            except Exception as e:
+                print(f"Error reading image file {self.image}: {e}")
+        
         return None
+
 
 class TelePost(db.Model):
     __tablename__ = "tele_posts"

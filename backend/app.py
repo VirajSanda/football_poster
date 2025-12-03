@@ -147,72 +147,6 @@ def download_image_as_bytes(image_url):
         print(f"❌ Error downloading image: {e}")
         return None
 
-# ---------------- Routes ---------------- #
-
-@app.route("/posts", methods=["GET"])
-def get_posts():
-    status = request.args.get("status")
-
-    # By default, show posts fetched within the last 24 hours and not rejected.
-    cutoff = datetime.now(timezone.utc) - timedelta(days=1)
-
-    # If an explicit status is requested, respect it. For non-rejected
-    # statuses, only return items newer than the cutoff. If the caller asks
-    # for 'rejected' explicitly, return rejected posts regardless of age.
-    if status:
-        if status == "rejected":
-            query = Post.query.filter_by(status="rejected")
-        elif status in ["draft", "approved", "published"]:
-            query = Post.query.filter_by(status=status).filter(Post.created_at >= cutoff)
-        else:
-            # unknown status -> return empty
-            return jsonify([])
-    else:
-        # no explicit status -> return all non-rejected posts within 24h
-        query = Post.query.filter(Post.status != "rejected").filter(Post.created_at >= cutoff)
-
-    posts = query.order_by(Post.created_at.desc()).all()
-    return jsonify([p.serialize() for p in posts])
-
-@app.route("/posts", methods=["POST"])
-def create_post():
-    data = request.json or {}
-
-    title = data.get("title")
-    summary = data.get("summary", "")
-    full_description = data.get("full_description", "")
-    article_url = data.get("article_url", "")
-    image_url = data.get("image_url", "")
-
-    if not title:
-        return jsonify({"error": "Title is required"}), 400
-
-    # Download image as binary data (updated function)
-    image_data, filename = download_image_as_bytes_with_filename(image_url)
-    
-    if not image_data:
-        return jsonify({"error": "Failed to download or process image"}), 500
-    
-    hashtags = generate_hashtags(title, summary)
-
-    post = Post(
-        title=title,
-        link=article_url,
-        summary=summary,
-        full_description=full_description,
-        # Store binary data
-        image_data=image_data,
-        image_filename=filename,
-        # Keep old field for backward compatibility
-        image=f"/image/{Post.query.count() + 1}",  # Approximate URL
-        hashtags=",".join(hashtags),
-        status="draft",
-    )
-    db.session.add(post)
-    db.session.commit()
-
-    return jsonify(post.serialize()), 201
-
 def download_image_as_bytes_with_filename(image_url):
     """Download image and return bytes with filename"""
     try:
@@ -227,6 +161,11 @@ def download_image_as_bytes_with_filename(image_url):
         filename = os.path.basename(image_url).split('?')[0]
         if not filename or '.' not in filename:
             filename = f"{uuid4().hex}.jpg"
+        else:
+            # Ensure it has a .jpg extension
+            name, ext = os.path.splitext(filename)
+            if ext.lower() not in ['.jpg', '.jpeg', '.png', '.gif']:
+                filename = f"{uuid4().hex}.jpg"
         
         # Open and process image
         img = Image.open(io.BytesIO(response.content))
@@ -250,6 +189,63 @@ def download_image_as_bytes_with_filename(image_url):
         print(f"❌ Error downloading image: {e}")
         return None, None
 
+# ---------------- Routes ---------------- #
+
+@app.route("/posts", methods=["GET"])
+def get_posts():
+    status = request.args.get("status")
+    cutoff = datetime.now(timezone.utc) - timedelta(days=1)
+
+    if status:
+        if status == "rejected":
+            query = Post.query.filter_by(status="rejected")
+        elif status in ["draft", "approved", "published"]:
+            query = Post.query.filter_by(status=status).filter(Post.created_at >= cutoff)
+        else:
+            return jsonify([])
+    else:
+        query = Post.query.filter(Post.status != "rejected").filter(Post.created_at >= cutoff)
+
+    posts = query.order_by(Post.created_at.desc()).all()
+    return jsonify([p.serialize() for p in posts])
+
+@app.route("/posts", methods=["POST"])
+def create_post():
+    data = request.json or {}
+
+    title = data.get("title")
+    summary = data.get("summary", "")
+    full_description = data.get("full_description", "")
+    article_url = data.get("article_url", "")
+    image_url = data.get("image_url", "")
+
+    if not title:
+        return jsonify({"error": "Title is required"}), 400
+
+    # Download image as binary data
+    image_data, filename = download_image_as_bytes_with_filename(image_url)
+    
+    if not image_data:
+        return jsonify({"error": "Failed to download or process image"}), 500
+    
+    hashtags = generate_hashtags(title, summary)
+
+    post = Post(
+        title=title,
+        link=article_url,
+        summary=summary,
+        full_description=full_description,
+        image_data=image_data,
+        image_filename=filename,
+        image=f"/image/{Post.query.count() + 1}",  # For backward compatibility
+        hashtags=",".join(hashtags),
+        status="draft",
+    )
+    db.session.add(post)
+    db.session.commit()
+
+    return jsonify(post.serialize()), 201
+
 @app.route("/approve/<int:post_id>", methods=["POST"])
 def approve_post(post_id):
     try:
@@ -267,7 +263,7 @@ def approve_post(post_id):
             title=post.title,
             summary=post.summary,
             hashtags=post.hashtags.split(",") if post.hashtags else [],
-            image_data=image_data  # Pass binary data instead of path
+            image_data=image_data
         )
 
         return jsonify({
@@ -306,20 +302,21 @@ def auto_fetch_news():
             print("🔄 Auto-fetching news...")
             new_count = 0
             
-            # Import inside function to avoid circular imports
             from rss_feeds import RSS_FEEDS
             
             for feed_url in RSS_FEEDS:
                 feed = feedparser.parse(feed_url)
-                for entry in feed.entries[:5]:  # limit 5 per feed
+                for entry in feed.entries[:5]:
                     if Post.query.filter_by(title=entry.title).first():
                         continue
 
                     image_url = get_main_image(entry.link)
                     summary = entry.get("summary", "")
-                    img_path = generate_post_image_nocrop("", image_url, entry.link, summary)
                     
-                    if not img_path:
+                    # NEW: Download as binary data
+                    image_data = download_image_as_bytes(image_url)
+                    
+                    if not image_data:
                         print(f"⚠️ Skipped {entry.title} due to missing image")
                         continue
                     
@@ -330,8 +327,10 @@ def auto_fetch_news():
                         link=entry.link,
                         summary=summary,
                         full_description=summary,
-                        image=img_path,
-                        hashtags=",".join(hashtags),  # Changed to comma for consistency
+                        image_data=image_data,  # Store binary data
+                        image_filename=f"{uuid4().hex}.jpg",
+                        image=f"/image/{Post.query.count() + 1}",  # For compatibility
+                        hashtags=",".join(hashtags),
                         status="draft",
                     )
                     db.session.add(post)
@@ -339,14 +338,13 @@ def auto_fetch_news():
 
             db.session.commit()
             print(f"✅ Auto-fetched {new_count} new posts at {datetime.now()}")
-            return new_count  # Return count for logging
+            return new_count
             
         except Exception as e:
             print(f"🔥 ERROR in auto_fetch_news: {str(e)}")
             import traceback
             traceback.print_exc()
             return 0
-
 
 @app.route("/fetch_news", methods=["POST"])
 def fetch_news():
@@ -365,7 +363,6 @@ def fetch_news():
             image_url = get_main_image(entry.link)
             summary = entry.get("summary", "")
             
-            # Get image binary data instead of file path
             image_data = download_image_as_bytes(image_url)
             
             if not image_data:
@@ -379,8 +376,9 @@ def fetch_news():
                 link=entry.link,
                 summary=summary,
                 full_description=summary,
-                image_data=image_data,  # Store binary data
-                image_filename=f"{uuid4().hex}.jpg",  # Keep filename for reference
+                image_data=image_data,
+                image_filename=f"{uuid4().hex}.jpg",
+                image=f"/image/{Post.query.count() + 1}",  # For compatibility
                 hashtags=",".join(hashtags),
                 status="draft",
             )
@@ -402,10 +400,58 @@ def fetch_news():
 def get_image(post_id):
     """Serve image from database."""
     post = Post.query.get_or_404(post_id)
-    if not post.image_data:
-        return jsonify({"error": "Image not found"}), 404
     
-    return Response(post.image_data, mimetype='image/jpeg')
+    # Try to get image data
+    image_data = post.get_image_data()
+    
+    if image_data:
+        return Response(
+            image_data, 
+            mimetype='image/jpeg',
+            headers={
+                'Content-Disposition': f'inline; filename="{post.image_filename or f"post_{post_id}.jpg"}"',
+                'Cache-Control': 'public, max-age=86400'  # Cache for 24 hours
+            }
+        )
+    
+    # If no image data, check if there's a placeholder
+    placeholder_path = 'static/images/placeholder.jpg'
+    if os.path.exists(placeholder_path):
+        return send_file(placeholder_path, mimetype='image/jpeg')
+    
+    # Create a simple placeholder on the fly
+    from PIL import Image, ImageDraw
+    img = Image.new('RGB', (800, 600), color=(240, 240, 240))
+    draw = ImageDraw.Draw(img)
+    
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='JPEG')
+    img_byte_arr = img_byte_arr.getvalue()
+    
+    return Response(
+        img_byte_arr,
+        mimetype='image/jpeg',
+        headers={'Cache-Control': 'no-cache'}
+    )
+
+# Add a simple placeholder creation endpoint
+@app.route('/create_placeholder')
+def create_placeholder():
+    """Create a placeholder image if missing"""
+    os.makedirs('static/images', exist_ok=True)
+    
+    from PIL import Image, ImageDraw
+    img = Image.new('RGB', (800, 600), color=(240, 240, 240))
+    draw = ImageDraw.Draw(img)
+    
+    # Add some text
+    try:
+        draw.text((400, 300), "No Image", fill=(150, 150, 150))
+    except:
+        pass
+    
+    img.save('static/images/placeholder.jpg', 'JPEG')
+    return jsonify({"status": "placeholder created"})
 
 # ---------------- Manual Upload Endpoint ---------------- #
 
