@@ -1,4 +1,4 @@
-import os
+import tempfile, os
 import feedparser
 import requests
 from bs4 import BeautifulSoup
@@ -296,15 +296,28 @@ def approve_post(post_id):
         post.status = "approved"
         db.session.commit()
 
-        # Get image data for Facebook
-        image_data = post.get_image_data()
-        
+        # Load image bytes from DB or disk
+        image_bytes = post.get_image_data()
+        if not image_bytes:
+            return jsonify({"status": "error", "message": "No image data found"}), 500
+
+        # Create a temporary file for Facebook upload
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        tmp.write(image_bytes)
+        tmp.close()
+        temp_image_path = tmp.name
+
+        # Send to Facebook
         fb_result = post_to_facebook(
             title=post.title,
             summary=post.summary,
             hashtags=post.hashtags.split(",") if post.hashtags else [],
-            image_path=post.image
+            image_path=temp_image_path   # <<--- Correct path
         )
+
+        # Delete temp file
+        if os.path.exists(temp_image_path):
+            os.remove(temp_image_path)
 
         return jsonify({
             "status": "success",
@@ -312,6 +325,7 @@ def approve_post(post_id):
             "post": post.serialize(),
             "facebook": fb_result
         }), 200
+
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
