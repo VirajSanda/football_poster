@@ -10,7 +10,9 @@ from werkzeug.utils import secure_filename
 import uuid
 import json
 from sqlalchemy import or_
-
+from sqlalchemy import create_engine
+from sqlalchemy.pool import QueuePool
+from sqlalchemy.exc import OperationalError, DisconnectionError
 # Local imports
 from models import db, Post, VideoUploadLog, FootballNews, BirthdayPost
 from image_generator import generate_post_image, generate_hashtags, PLACEHOLDER_PATH, generate_post_image_nocrop
@@ -55,6 +57,40 @@ else:
     print("💻 Using SQLite database")
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+    'pool_size': 5,
+    'max_overflow': 10,
+}
+# Database configuration
+def get_engine(database_url):
+    """Create engine with connection pooling and reconnection logic"""
+    # Add SSL mode for Render PostgreSQL
+    if database_url.startswith('postgresql://'):
+        if '?' in database_url:
+            database_url += '&sslmode=require'
+        else:
+            database_url += '?sslmode=require'
+    
+    engine = create_engine(
+        database_url,
+        poolclass=QueuePool,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,  # Important: checks connection before using
+        pool_recycle=300,    # Recycle connections every 5 minutes
+        pool_timeout=30,
+        echo=False,
+        connect_args={
+            'connect_timeout': 10,
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5,
+        }
+    )
+    return engine
 
 db.init_app(app)
 
