@@ -443,8 +443,7 @@ def get_image(post_id):
         post = Post.query.get(post_id)
         
         if not post:
-            # Return a 404 with a placeholder
-            return generate_placeholder_image(f"Post {post_id} not found"), 404
+            return jsonify({"error": "Post not found"}), 404
         
         # Try to get image data
         image_data = None
@@ -456,18 +455,21 @@ def get_image(post_id):
         elif post.image:
             # Clean up the path
             clean_path = post.image.strip()
-            if clean_path.startswith('//'):
-                clean_path = clean_path[1:]  # Remove leading slash
-            elif clean_path.startswith('/'):
-                clean_path = clean_path[1:]  # Remove leading slash
             
-            # Try to read the file
+            # Remove leading slashes to make it relative
+            while clean_path.startswith('/'):
+                clean_path = clean_path[1:]
+            
+            # Try to read the file if it exists
             if os.path.exists(clean_path):
                 try:
                     with open(clean_path, 'rb') as f:
                         image_data = f.read()
                 except Exception as e:
                     print(f"Error reading file {clean_path}: {e}")
+                    # Continue to return 404
+            else:
+                print(f"Image file not found: {clean_path}")
         
         if image_data:
             return Response(
@@ -479,13 +481,13 @@ def get_image(post_id):
                 }
             )
         else:
-            # Generate a placeholder
-            return generate_placeholder_image(post.title[:50])
+            # No image data found - return 404
+            return jsonify({"error": "Image not found"}), 404
             
     except Exception as e:
         print(f"Error in get_image endpoint: {e}")
-        return generate_placeholder_image("Error loading image"), 500
-
+        return jsonify({"error": "Internal server error"}), 500
+        
 # Add a simple placeholder creation endpoint
 @app.route('/create_placeholder')
 def create_placeholder():
