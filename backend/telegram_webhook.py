@@ -8,7 +8,7 @@ from facebook_poster import upload_to_facebook, upload_video_to_facebook
 from config import Config
 from models import db, TelePost
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from youtube_upload import upload_video_stream 
 
 telegram_bp = Blueprint("telegram", __name__)
@@ -74,7 +74,7 @@ def telegram_webhook():
                 caption=caption,
                 image_path=branded_image,
                 status="posted",
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
             db.session.add(new_post)
             db.session.commit()
@@ -120,7 +120,7 @@ def telegram_webhook():
                 caption=caption,
                 image_path=local_video,
                 status="posted",
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 youtube_video_id=yt_video_id,
                 youtube_raw=(None if yt_response is None else json.dumps(yt_response))
             )

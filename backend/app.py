@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from werkzeug.utils import secure_filename
 import uuid
 import json
@@ -154,7 +154,7 @@ def get_posts():
     status = request.args.get("status")
 
     # By default, show posts fetched within the last 24 hours and not rejected.
-    cutoff = datetime.utcnow() - timedelta(days=1)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=1)
 
     # If an explicit status is requested, respect it. For non-rejected
     # statuses, only return items newer than the cutoff. If the caller asks
