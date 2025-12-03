@@ -399,40 +399,52 @@ def fetch_news():
 @app.route('/image/<int:post_id>')
 def get_image(post_id):
     """Serve image from database."""
-    post = Post.query.get_or_404(post_id)
-    
-    # Try to get image data
-    image_data = post.get_image_data()
-    
-    if image_data:
-        return Response(
-            image_data, 
-            mimetype='image/jpeg',
-            headers={
-                'Content-Disposition': f'inline; filename="{post.image_filename or f"post_{post_id}.jpg"}"',
-                'Cache-Control': 'public, max-age=86400'  # Cache for 24 hours
-            }
-        )
-    
-    # If no image data, check if there's a placeholder
-    placeholder_path = 'static/images/placeholder.jpg'
-    if os.path.exists(placeholder_path):
-        return send_file(placeholder_path, mimetype='image/jpeg')
-    
-    # Create a simple placeholder on the fly
-    from PIL import Image, ImageDraw
-    img = Image.new('RGB', (800, 600), color=(240, 240, 240))
-    draw = ImageDraw.Draw(img)
-    
-    img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='JPEG')
-    img_byte_arr = img_byte_arr.getvalue()
-    
-    return Response(
-        img_byte_arr,
-        mimetype='image/jpeg',
-        headers={'Cache-Control': 'no-cache'}
-    )
+    try:
+        post = Post.query.get(post_id)
+        
+        if not post:
+            # Return a 404 with a placeholder
+            return generate_placeholder_image(f"Post {post_id} not found"), 404
+        
+        # Try to get image data
+        image_data = None
+        
+        # First try the new binary storage
+        if post.image_data:
+            image_data = post.image_data
+        # Fallback to old file storage
+        elif post.image:
+            # Clean up the path
+            clean_path = post.image.strip()
+            if clean_path.startswith('//'):
+                clean_path = clean_path[1:]  # Remove leading slash
+            elif clean_path.startswith('/'):
+                clean_path = clean_path[1:]  # Remove leading slash
+            
+            # Try to read the file
+            if os.path.exists(clean_path):
+                try:
+                    with open(clean_path, 'rb') as f:
+                        image_data = f.read()
+                except Exception as e:
+                    print(f"Error reading file {clean_path}: {e}")
+        
+        if image_data:
+            return Response(
+                image_data, 
+                mimetype='image/jpeg',
+                headers={
+                    'Content-Disposition': f'inline; filename="{post.image_filename or f"post_{post_id}.jpg"}"',
+                    'Cache-Control': 'public, max-age=86400'
+                }
+            )
+        else:
+            # Generate a placeholder
+            return generate_placeholder_image(post.title[:50])
+            
+    except Exception as e:
+        print(f"Error in get_image endpoint: {e}")
+        return generate_placeholder_image("Error loading image"), 500
 
 # Add a simple placeholder creation endpoint
 @app.route('/create_placeholder')
