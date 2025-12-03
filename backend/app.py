@@ -303,7 +303,7 @@ def approve_post(post_id):
             title=post.title,
             summary=post.summary,
             hashtags=post.hashtags.split(",") if post.hashtags else [],
-            image_data=image_data
+            image_path=post.image
         )
 
         return jsonify({
