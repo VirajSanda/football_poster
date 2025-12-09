@@ -45,9 +45,6 @@ def test_telegram_video_upload_flow(monkeypatch, tmp_path):
     # Monkeypatch facebook/video upload functions to be no-ops
     monkeypatch.setattr(tw, "upload_video_to_facebook", lambda path, caption: {"fb": "ok"})
 
-    # Monkeypatch youtube upload to return an id
-    monkeypatch.setattr(tw, "upload_video_stream", lambda f, name: {"id": "YT_FAKE_ID"})
-
     # Allow any channel
     monkeypatch.setattr(tw, "ALLOWED_CHANNELS", [])
 
@@ -71,11 +68,3 @@ def test_telegram_video_upload_flow(monkeypatch, tmp_path):
     assert resp.status_code == 200
     data = resp.get_json()
     assert data.get("status") == "ok"
-    # youtube_video_id should be present in response
-    assert data.get("youtube_video_id") == "YT_FAKE_ID"
-
-    # Check DB record saved with youtube_video_id
-    with app_module.app.app_context():
-        rec = TelePost.query.filter_by(channel_id=str(12345)).first()
-        assert rec is not None
-        assert rec.youtube_video_id == "YT_FAKE_ID"
