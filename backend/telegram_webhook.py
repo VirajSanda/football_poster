@@ -97,23 +97,6 @@ def telegram_webhook():
             fb_caption = f"{caption}\n\n📢 From {channel_title}"
             fb_result = upload_video_to_facebook(local_video, fb_caption)
 
-            # ⚡ Upload to YouTube
-            print("🎥 Starting YouTube upload...")
-            yt_video_id = None
-            yt_response = None
-            try:
-                with open(local_video, "rb") as f:
-                    yt_response = upload_video_stream(f, os.path.basename(local_video))
-                # upload_video_stream now returns dict with 'id' and optional 'raw'
-                if isinstance(yt_response, dict):
-                    yt_video_id = yt_response.get("id")
-                print(f"🎥 YouTube upload response: {yt_response}")
-            except Exception as e:
-                traceback.print_exc()
-                print(f"❌ YouTube upload failed: {e}")
-                # Continue — we still save the TelePost record, but mark that
-                # youtube upload failed by not providing an id in the response.
-
             new_post = TelePost(
                 channel_id=channel_id,
                 channel_title=channel_title,
@@ -129,10 +112,6 @@ def telegram_webhook():
 
             print(f"✅ Video post processed for {channel_title}")
             result = {"status": "ok", "facebook_result": fb_result}
-            if yt_video_id:
-                result["youtube_video_id"] = yt_video_id
-            else:
-                result["youtube_error"] = "upload_failed"
             return jsonify(result), 200
 
         else:

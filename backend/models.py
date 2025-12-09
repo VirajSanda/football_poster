@@ -58,7 +58,6 @@ class Post(db.Model):
         
         return None
 
-
 class TelePost(db.Model):
     __tablename__ = "tele_posts"
 
