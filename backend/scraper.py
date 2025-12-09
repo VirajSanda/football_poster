@@ -933,11 +933,6 @@ def schedule_new_posts(session, dry_run=False):
                 logger.warning("Skipping final duplicate: %s", post.title)
                 continue
             
-            # Create a good summary if empty
-            summary = post.summary or f"Latest football news from {post.source}"
-            if not summary and post.title:
-                summary = f"Check out this new football update from {post.source}"
-            
             # Prepare hashtags
             hashtags = get_hashtags_for_source(post.source)
             
