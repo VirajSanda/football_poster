@@ -626,10 +626,6 @@ def upload_video():
         with open(tmp_path, "wb") as out:
             out.write(file.read())
 
-        # Upload to YouTube using a file stream
-        with open(tmp_path, "rb") as stream:
-            yt_video_id = upload_video_stream(stream, file.filename)
-
         # Upload to Facebook (expects a file path)
         try:
             fb_result = upload_video_to_facebook(tmp_path, file.filename)
@@ -639,8 +635,6 @@ def upload_video():
         log = VideoUploadLog(
             source="ui",
             original_filename=file.filename,
-            youtube_video_id=(yt_video_id.get("id") if isinstance(yt_video_id, dict) else None),
-            error=None if isinstance(yt_video_id, dict) else str(yt_video_id),
         )
         # attach facebook info as a text blob on the log if present
         try:
@@ -658,7 +652,7 @@ def upload_video():
         except Exception:
             pass
 
-        return jsonify({"ok": True, "youtube_id": yt_video_id, "facebook": fb_result})
+        return jsonify({"ok": True, "facebook": fb_result})
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})

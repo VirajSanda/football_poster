@@ -104,8 +104,6 @@ def telegram_webhook():
                 image_path=local_video,
                 status="posted",
                 created_at=datetime.now(timezone.utc),
-                youtube_video_id=yt_video_id,
-                youtube_raw=(None if yt_response is None else json.dumps(yt_response))
             )
             db.session.add(new_post)
             db.session.commit()
