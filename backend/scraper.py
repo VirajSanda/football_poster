@@ -951,7 +951,7 @@ def schedule_new_posts(session, dry_run=False):
                 
                 result = post_to_facebook_scheduled(
                     title=post.title,
-                    summary=summary,
+                    summary="",
                     hashtags=hashtags,
                     image_url=post.image_url,
                     video_url=post.video_url,
