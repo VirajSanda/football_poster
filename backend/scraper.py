@@ -926,13 +926,32 @@ def schedule_new_posts(session, dry_run=False):
                 next_time = next_time.replace(tzinfo=timezone.utc)
         
         scheduled_count = 0
+        seen_titles_in_this_batch = set()
         
         for post in unscheduled_posts:
+            # ENHANCED: Check for near-duplicates in this batch
+            current_title_lower = post.title.lower().strip()
+            is_duplicate_in_batch = False
+            
+            for seen_title in seen_titles_in_this_batch:
+                # Check if titles are very similar (e.g., 80% similar)
+                similarity = calculate_title_similarity(current_title_lower, seen_title)
+                if similarity > 0.8:  # 80% similarity threshold
+                    logger.warning("⚠️ Skipping duplicate in same batch: %s (similar to: %s)", 
+                                 post.title[:50], seen_title[:50])
+                    is_duplicate_in_batch = True
+                    break
+            
+            if is_duplicate_in_batch:
+                continue
+
             # Final duplicate check before scheduling
             if is_duplicate_post(post.title, post.summary or "", recent_posts):
                 logger.warning("Skipping final duplicate: %s", post.title)
                 continue
             
+            seen_titles_in_this_batch.add(current_title_lower)
+
             # Prepare hashtags
             hashtags = get_hashtags_for_source(post.source)
             
@@ -1387,11 +1406,32 @@ def run_scraper(dry_run=False):
 
         # Filter out potential duplicates before insertion
         filtered_articles = []
+        # ADD THIS LINE: Initialize the set for tracking titles in this batch
+        seen_titles_in_this_batch = set()
+        
         for article in all_articles:
+            # ENHANCED: Check for near-duplicates in this batch
+            current_title_lower = article['title'].lower().strip()
+            is_duplicate_in_batch = False
+            
+            for seen_title in seen_titles_in_this_batch:
+                # Check if titles are very similar (e.g., 80% similar)
+                similarity = calculate_title_similarity(current_title_lower, seen_title)
+                if similarity > 0.8:  # 80% similarity threshold
+                    logger.warning("⚠️ Skipping duplicate in same batch: %s (similar to: %s)", 
+                                 article['title'][:50], seen_title[:50])  # Fixed: article['title'] not article.title
+                    is_duplicate_in_batch = True
+                    break
+            
+            if is_duplicate_in_batch:
+                continue
+            
             # Check against recent Facebook posts
             if is_duplicate_post(article['title'], article.get('summary', ''), recent_posts):
                 logger.warning("Skipping potential duplicate: %s", article['title'])
                 continue
+            
+            seen_titles_in_this_batch.add(current_title_lower)
             
             # Check against already scheduled posts
             if is_already_scheduled(session, article['title'], article['url']):
@@ -1429,6 +1469,27 @@ def run_scraper(dry_run=False):
                 logger.info("DRY: seq=%s title=%s url=%s media=%s", i["seq"], i["title"], i["url"], media_type)
 
     logger.info("Football scraper run complete.")
+
+# ADD THIS HELPER FUNCTION for title similarity checking
+def calculate_title_similarity(title1, title2):
+    """
+    Calculate similarity between two titles using word overlap.
+    Returns a value between 0 (completely different) and 1 (identical).
+    """
+    # Split titles into words and remove common stop words
+    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+    
+    words1 = set(word.lower() for word in title1.split() if word.lower() not in stop_words and len(word) > 2)
+    words2 = set(word.lower() for word in title2.split() if word.lower() not in stop_words and len(word) > 2)
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    # Calculate Jaccard similarity
+    intersection = len(words1.intersection(words2))
+    union = len(words1.union(words2))
+    
+    return intersection / union if union > 0 else 0.0
     
 # --------------------------------------------------------------------
 # WORKER FUNCTION
