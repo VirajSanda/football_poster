@@ -1,13 +1,24 @@
 import { useState, useEffect } from "react";
 import { API_BASE_URL } from "./config";
+import {
+  Routes,
+  Route,
+  useNavigate,
+  useLocation,
+  Navigate,
+} from "react-router-dom";
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("posts");
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // derive activeTab from URL (fallback = posts)
+  const activeTab = location.pathname.replace("/", "") || "posts";
 
   // Close sidebar when switching tabs on mobile
   const handleTabChange = (tab) => {
-    setActiveTab(tab);
+    navigate(`/${tab}`);
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
@@ -34,25 +45,6 @@ function App() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [sidebarOpen]);
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case "posts":
-        return <PostsPage />;
-      case "upload":
-        return <ManualUpload />;
-      case "videos":
-        return <VideoUploadPage />;
-      case "birthdays":
-        return <BirthdayGenerator />;
-      case "missing-images": // Add this new case
-        return <PostsWithoutImages />;
-      case "scheduled":
-        return <ScheduledPostsManager />;
-      default:
-        return <PostsPage />;
-    }
-  };
-
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Mobile Overlay */}
@@ -73,6 +65,7 @@ function App() {
         <div className="flex items-center justify-center h-16 border-b border-gray-700 px-4">
           <h1 className="text-xl font-bold truncate">⚽ KickOffZone</h1>
         </div>
+
         <nav className="mt-6 space-y-1">
           {[
             { id: "posts", label: "Posts", icon: "📰" },
@@ -80,7 +73,7 @@ function App() {
             { id: "videos", label: "Video Upload", icon: "🎥" },
             { id: "birthdays", label: "Birthdays", icon: "🎂" },
             { id: "missing-images", label: "Missing Images", icon: "📸" },
-            { id: "scheduled", label: "Scheduled Posts", icon: "📅" }, // Add this new tab
+            { id: "scheduled", label: "Scheduled Posts", icon: "📅" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -109,20 +102,35 @@ function App() {
           >
             <span className="text-xl">☰</span>
           </button>
+
           <h2 className="text-lg font-semibold text-gray-800 truncate md:text-xl">
-            {activeTab === "posts" && "All Posts"}
-            {activeTab === "upload" && "Manual Upload"}
-            {activeTab === "videos" && "Video Upload"}
-            {activeTab === "birthdays" && "Birthday Generator"}
-            {activeTab === "missing-images" && "Missing Images"}
-            {activeTab === "scheduled" && "Scheduled"}
+            {
+              {
+                posts: "All Posts",
+                upload: "Manual Upload",
+                videos: "Video Upload",
+                birthdays: "Birthday Generator",
+                "missing-images": "Missing Images",
+                scheduled: "Scheduled",
+              }[activeTab]
+            }
           </h2>
-          <div className="w-8 md:w-auto"></div> {/* Spacer for balance */}
+
+          <div className="w-8 md:w-auto" />
         </header>
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-2 md:p-2">
-          {renderContent()}
+          <Routes>
+            <Route path="/" element={<Navigate to="/posts" replace />} />
+            <Route path="/posts" element={<PostsPage />} />
+            <Route path="/upload" element={<ManualUpload />} />
+            <Route path="/videos" element={<VideoUploadPage />} />
+            <Route path="/birthdays" element={<BirthdayGenerator />} />
+            <Route path="/missing-images" element={<PostsWithoutImages />} />
+            <Route path="/scheduled" element={<ScheduledPostsManager />} />
+            <Route path="*" element={<Navigate to="/posts" replace />} />
+          </Routes>
         </main>
       </div>
     </div>
