@@ -658,12 +658,10 @@ def upload_video():
         return jsonify({"ok": False, "error": str(e)})
 
 # ---------------- Birthday Posts Endpoints ---------------- #
-
 # ✅ Fetch and auto-generate birthday posts      
 @app.route("/birthday_posts", methods=["GET"])
 def birthday_posts():
     try:
-        
         # --- CLEANUP: Remove OLD birthday posts (anything not from today) ---
         today_date = datetime.now(timezone.utc).date()
 
@@ -707,11 +705,16 @@ def birthday_posts():
         births = data.get("births", []) if isinstance(data, dict) else []
         results = []
 
-        # --- Step 2: Filter Film/TV personalities ---
+        # --- Step 2: Filter FOOTBALL/SOCCER personalities ---
         football_keywords = [
             "football", "football player", "soccer", "striker",
-            "midfielder", "goalkeeper","fifa", "uefa", "sportsman"
-            "sportswoman", "footballer", "manager", "coach"
+            "midfielder", "goalkeeper", "fifa", "uefa", "sportsman",
+            "sportswoman", "footballer", "manager", "coach", "defender",
+            "forward", "winger", "captain", "premier league", "la liga",
+            "serie a", "bundesliga", "mls", "champions league", "world cup",
+            "international", "national team", "club", "association football",
+            "professional footballer", "football manager", "football coach",
+            "soccer player", "professional soccer"
         ]
 
         for person in births:
@@ -723,40 +726,55 @@ def birthday_posts():
 
             first_page = pages[0]
             summary = first_page.get("extract", "") or ""
-            thumb = first_page.get("thumbnail")
+            thumb = first_page.get("thumbnail", {}) or {}
             image = thumb.get("source", "") if isinstance(thumb, dict) else ""
 
-            is_film_tv = any(k in summary.lower() for k in film_keywords)
+            # Check if this person is a footballer
+            is_footballer = False
+            summary_lower = summary.lower()
+            
+            # Check keywords in summary
+            for keyword in football_keywords:
+                if keyword in summary_lower:
+                    is_footballer = True
+                    break
+            
+            # Additional check for common football terms
+            football_terms = ["appearances", "goals", "caps", "transfer", "signing", 
+                            "debut", "retired", "scored", "assists", "trophy"]
+            if any(term in summary_lower for term in football_terms[:3]):
+                is_footballer = True
 
             results.append({
                 "name": name,
                 "year": year,
                 "summary": summary,
                 "image": image,
-                "is_film_tv": is_film_tv,
+                "is_footballer": is_footballer,  # Changed from is_film_tv
             })
 
         if not results:
             print("⚠️ No birthdays found.")
             return jsonify({"count": 0, "posts": []})
 
-        # --- Step 3: Save all results to DB ---
-        film_tv_results = [r for r in results if r["is_film_tv"] and r["year"] > 1950]
+        # --- Step 3: Save footballers to DB ---
+        # Filter for footballers born after 1950
+        footballer_results = [r for r in results if r["is_footballer"] and r["year"] > 1950]
         saved_posts = []
-        for r in film_tv_results:
+        for r in footballer_results:
             birth_year_str = str(r["year"])
-            # Avoid duplicate insert if already exists for today
             
+            # Avoid duplicate insert if already exists for today
             existing = BirthdayPost.query.filter_by(
                 name=r["name"], 
-                birth_year=birth_year_str  # Compare as string
+                birth_year=birth_year_str
             ).first()
             if existing:
                 continue
                 
             post = BirthdayPost(
                 name=r["name"],
-                birth_year=birth_year_str,  # Store as string
+                birth_year=birth_year_str,
                 summary=r["summary"],
                 image=r["image"],
                 status="pending_generation",
@@ -764,11 +782,14 @@ def birthday_posts():
             )
             db.session.add(post)
             saved_posts.append(post)
-        db.session.commit()
+        
+        if saved_posts:
+            db.session.commit()
+            print(f"✅ Saved {len(saved_posts)} new Footballer posts to DB.")
+        else:
+            print("ℹ️ No new footballer posts to save.")
 
-        print(f"✅ Saved {len(saved_posts)} new Film/TV posts to DB.")
-
-        # --- Step 5: Return all posts from DB ---
+        # --- Step 4: Return all posts from DB ---
         query = BirthdayPost.query
         if status:
             query = query.filter_by(status=status)
@@ -778,7 +799,7 @@ def birthday_posts():
 
         posts = query.order_by(BirthdayPost.created_at.desc()).all()
 
-        # ✅ SAFELY SERIALIZE — fix for “NoneType has no attribute isoformat”
+        # ✅ SAFELY SERIALIZE — fix for "NoneType has no attribute isoformat"
         def safe_serialize(post):
             return {
                 "id": post.id,
@@ -796,12 +817,17 @@ def birthday_posts():
                 "theme": getattr(post, "theme", None),
                 "source_type": getattr(post, "source_type", None),
                 "output_path": getattr(post, "output_path", None),
+                # Add football-specific fields if needed in future
+                "position": getattr(post, "position", None),
+                "club": getattr(post, "club", None),
             }
 
         return jsonify([safe_serialize(p) for p in posts])
 
     except Exception as e:
         print("🔥 Error in birthday_posts:", str(e))
+        import traceback
+        traceback.print_exc()
         return jsonify({"count": 0, "posts": []}), 500
 
 # ✅ Approve Birthday Post
