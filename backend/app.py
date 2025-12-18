@@ -661,48 +661,97 @@ def upload_video():
 # ✅ Fetch and auto-generate birthday posts      
 @app.route("/birthday_posts", methods=["GET"])
 def birthday_posts():
-    try:
+    try:       
+        # --- Helper function for safe HTTP requests ---
+        def safe_get(url, headers=None, timeout=25, max_retries=3):
+            """Safe HTTP GET with retry logic"""
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(url, headers=headers, timeout=timeout)
+                    print(f"✅ Wikipedia API call successful: {response.status_code}")
+                    return response
+                except requests.exceptions.Timeout:
+                    print(f"⚠️ Request timeout (attempt {attempt + 1}/{max_retries})")
+                    if attempt == max_retries - 1:
+                        return None
+                except requests.exceptions.ConnectionError:
+                    print(f"⚠️ Connection error (attempt {attempt + 1}/{max_retries})")
+                    if attempt == max_retries - 1:
+                        return None
+                except Exception as e:
+                    print(f"⚠️ Request error: {e} (attempt {attempt + 1}/{max_retries})")
+                    if attempt == max_retries - 1:
+                        return None
+            return None
+        
         # --- CLEANUP: Remove OLD birthday posts (anything not from today) ---
-        today_date = datetime.now(timezone.utc).date()
+        try:
+            today_date = datetime.now(timezone.utc).date()
+            print(f"🎂 Today's date: {today_date}")
 
-        old_posts = BirthdayPost.query.filter(
-            db.func.date(BirthdayPost.created_at) != today_date
-        ).all()
+            old_posts = BirthdayPost.query.filter(
+                db.func.date(BirthdayPost.created_at) != today_date
+            ).all()
 
-        if old_posts:
-            for p in old_posts:
-                db.session.delete(p)
-            db.session.commit()
-            print(f"🧹 Deleted {len(old_posts)} old birthday posts.")
-            
+            if old_posts:
+                print(f"🧹 Found {len(old_posts)} old posts to delete")
+                for p in old_posts:
+                    db.session.delete(p)
+                db.session.commit()
+                print(f"✅ Deleted {len(old_posts)} old birthday posts.")
+        except Exception as db_error:
+            print(f"⚠️ Error during cleanup: {db_error}")
+            # Continue execution even if cleanup fails
+        
         # --- Step 1: Fetch today's Wikipedia birthdays ---
         today = datetime.now(timezone.utc)
         month = f"{today.month:02d}"
         day = f"{today.day:02d}"
         url = f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/births/{month}/{day}"
+        print(f"🎂 Fetching birthdays for {month}/{day} from: {url}")
         
         headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0 Safari/537.36"
-            ),
-            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
             "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://commons.wikimedia.org/"
         }
 
-        res = safe_get(url, headers, timeout=25)
-        if not res:
-            return {"error": "Wikipedia unreachable"}
-        status = request.args.get("status")
+        # Fetch Wikipedia data
+        res = None
+        try:
+            res = safe_get(url, headers, timeout=25)
+            if not res:
+                print("🔥 Wikipedia request failed or timed out")
+                # Return empty array (not object) to match frontend expectation
+                return jsonify([])
+        except Exception as e:
+            print(f"🔥 Failed to fetch Wikipedia data: {e}")
+            return jsonify([])
+        
+        # Get status parameter if provided
+        status = None
+        try:
+            status = request.args.get("status") if request else None
+            if status:
+                print(f"🎂 Status filter requested: {status}")
+        except:
+            pass  # Ignore if request.args fails
 
         if res.status_code != 200:
-            print(f"⚠️ Wikipedia API returned {res.status_code}")
-            return jsonify({"count": 0, "posts": []})
+            print(f"⚠️ Wikipedia API returned {res.status_code}: {res.text[:200]}")
+            return jsonify([])
 
-        data = res.json()
+        # Parse response
+        try:
+            data = res.json()
+            print(f"✅ Wikipedia response parsed, type: {type(data)}")
+        except Exception as e:
+            print(f"🔥 Failed to parse Wikipedia JSON: {e}")
+            return jsonify([])
+            
         births = data.get("births", []) if isinstance(data, dict) else []
+        print(f"✅ Found {len(births)} total birthdays from Wikipedia")
+        
         results = []
 
         # --- Step 2: Filter FOOTBALL/SOCCER personalities ---
@@ -714,12 +763,13 @@ def birthday_posts():
             "serie a", "bundesliga", "mls", "champions league", "world cup",
             "international", "national team", "club", "association football",
             "professional footballer", "football manager", "football coach",
-            "soccer player", "professional soccer"
+            "soccer player", "professional soccer", "football club"
         ]
 
+        football_count = 0
         for person in births:
             name = person.get("text", "")
-            year = person.get("year", "Unknown")
+            year = person.get("year", 0)
             pages = person.get("pages", []) or []
             if not name or not pages:
                 continue
@@ -741,8 +791,8 @@ def birthday_posts():
             
             # Additional check for common football terms
             football_terms = ["appearances", "goals", "caps", "transfer", "signing", 
-                            "debut", "retired", "scored", "assists", "trophy"]
-            if any(term in summary_lower for term in football_terms[:3]):
+                            "debut", "retired", "scored", "assists", "trophy", "league"]
+            if any(term in summary_lower for term in football_terms):
                 is_footballer = True
 
             results.append({
@@ -750,16 +800,23 @@ def birthday_posts():
                 "year": year,
                 "summary": summary,
                 "image": image,
-                "is_footballer": is_footballer,  # Changed from is_film_tv
+                "is_footballer": is_footballer,
             })
+            
+            if is_footballer:
+                football_count += 1
+
+        print(f"✅ Found {football_count} footballers out of {len(results)} total results")
 
         if not results:
             print("⚠️ No birthdays found.")
-            return jsonify({"count": 0, "posts": []})
+            return jsonify([])
 
         # --- Step 3: Save footballers to DB ---
         # Filter for footballers born after 1950
         footballer_results = [r for r in results if r["is_footballer"] and r["year"] > 1950]
+        print(f"✅ Found {len(footballer_results)} footballers born after 1950")
+        
         saved_posts = []
         for r in footballer_results:
             birth_year_str = str(r["year"])
@@ -770,6 +827,7 @@ def birthday_posts():
                 birth_year=birth_year_str
             ).first()
             if existing:
+                print(f"ℹ️ Already exists in DB: {r['name']} ({birth_year_str})")
                 continue
                 
             post = BirthdayPost(
@@ -782,53 +840,72 @@ def birthday_posts():
             )
             db.session.add(post)
             saved_posts.append(post)
+            print(f"➕ Added to DB: {r['name']} ({birth_year_str})")
         
         if saved_posts:
-            db.session.commit()
-            print(f"✅ Saved {len(saved_posts)} new Footballer posts to DB.")
+            try:
+                db.session.commit()
+                print(f"✅ Saved {len(saved_posts)} new Footballer posts to DB.")
+            except Exception as commit_error:
+                print(f"🔥 Error committing to DB: {commit_error}")
+                db.session.rollback()
         else:
             print("ℹ️ No new footballer posts to save.")
 
         # --- Step 4: Return all posts from DB ---
-        query = BirthdayPost.query
-        if status:
-            query = query.filter_by(status=status)
-        else:
-            # Default: show only posts that are pending generation
-            query = query.filter_by(status="pending_generation")
+        try:
+            query = BirthdayPost.query
+            if status:
+                query = query.filter_by(status=status)
+            else:
+                # Default: show only posts that are pending generation
+                query = query.filter_by(status="pending_generation")
 
-        posts = query.order_by(BirthdayPost.created_at.desc()).all()
+            posts = query.order_by(BirthdayPost.created_at.desc()).all()
+            print(f"✅ Retrieved {len(posts)} posts from database")
+        except Exception as db_error:
+            print(f"🔥 Error querying database: {db_error}")
+            posts = []
 
         # ✅ SAFELY SERIALIZE — fix for "NoneType has no attribute isoformat"
         def safe_serialize(post):
-            return {
-                "id": post.id,
-                "name": post.name,
-                "birth_year": post.birth_year,
-                "summary": post.summary,
-                "image": post.image,
-                "title": getattr(post, "title", None),
-                "status": post.status,
-                "created_at": post.created_at.isoformat() if post.created_at else None,
-                "updated_at": post.updated_at.isoformat() if getattr(post, "updated_at", None) else None,
-                "image_urls": getattr(post, "image_urls", None),
-                "composite_style": getattr(post, "composite_style", None),
-                "text_position": getattr(post, "text_position", None),
-                "theme": getattr(post, "theme", None),
-                "source_type": getattr(post, "source_type", None),
-                "output_path": getattr(post, "output_path", None),
-                # Add football-specific fields if needed in future
-                "position": getattr(post, "position", None),
-                "club": getattr(post, "club", None),
-            }
+            try:
+                return {
+                    "id": post.id,
+                    "name": post.name,
+                    "birth_year": post.birth_year,
+                    "summary": post.summary,
+                    "image": post.image if post.image else "",
+                    "title": getattr(post, "title", None),
+                    "status": post.status,
+                    "created_at": post.created_at.isoformat() if post.created_at else None,
+                    "updated_at": post.updated_at.isoformat() if getattr(post, "updated_at", None) else None,
+                    "image_urls": getattr(post, "image_urls", None),
+                    "composite_style": getattr(post, "composite_style", None),
+                    "text_position": getattr(post, "text_position", None),
+                    "theme": getattr(post, "theme", None),
+                    "source_type": getattr(post, "source_type", None),
+                    "output_path": getattr(post, "output_path", None),
+                }
+            except Exception as e:
+                print(f"⚠️ Error serializing post {getattr(post, 'id', 'unknown')}: {e}")
+                return {"error": "Serialization error"}
 
-        return jsonify([safe_serialize(p) for p in posts])
+        # Return array directly to match frontend expectation
+        serialized_posts = [safe_serialize(p) for p in posts]
+        print(f"✅ Returning {len(serialized_posts)} posts to frontend")
+        
+        response = jsonify(serialized_posts)
+        response.headers.add('Access-Control-Allow-Origin', '*')  # Ensure CORS
+        return response
 
     except Exception as e:
         print("🔥 Error in birthday_posts:", str(e))
         import traceback
         traceback.print_exc()
-        return jsonify({"count": 0, "posts": []}), 500
+        response = jsonify([])  # Return empty array
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
 
 # ✅ Approve Birthday Post
 @app.route("/reject_post/<int:post_id>", methods=["POST"])
@@ -959,21 +1036,23 @@ def start_scraper_scheduler():
         
         # Wait a bit for app to fully start
         time.sleep(30)
-        
-        while True:
-            try:
-                logger.info("🔄 Starting scheduled scraper run...")
-                from scraper import run_scraper
-                run_scraper(dry_run=False)
-                logger.info("✅ Scheduled scraper run completed")
-                logger.info("🔄 Starting scheduled fetch news run...")
-                auto_fetch_news()
-                logger.info("✅ Scheduled fetch news run completed")
-            except Exception as e:
-                logger.error(f"❌ Scheduled scraper run failed: {e}")
             
-            logger.info(f"⏰ Waiting {interval_hours} hours until next run...")
-            time.sleep(interval_seconds)
+        
+        if os.environ.get("RENDER"):  # Render sets this environment variable
+            while True:
+                try:
+                    logger.info("🔄 Starting scheduled scraper run...")
+                    from scraper import run_scraper
+                    run_scraper(dry_run=False)
+                    logger.info("✅ Scheduled scraper run completed")
+                    logger.info("🔄 Starting scheduled fetch news run...")
+                    auto_fetch_news()
+                    logger.info("✅ Scheduled fetch news run completed")
+                except Exception as e:
+                    logger.error(f"❌ Scheduled scraper run failed: {e}")
+                
+                logger.info(f"⏰ Waiting {interval_hours} hours until next run...")
+                time.sleep(interval_seconds)
     
     # Start in background thread
     thread = threading.Thread(target=scraper_worker, daemon=True)
