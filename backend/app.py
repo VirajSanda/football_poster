@@ -814,8 +814,8 @@ def birthday_posts():
 
         # --- Step 3: Save footballers to DB ---
         # Filter for footballers born after 1950
-        footballer_results = [r for r in results if r["is_footballer"] and r["year"] > 1950]
-        print(f"✅ Found {len(footballer_results)} footballers born after 1950")
+        footballer_results = [r for r in results if r["is_footballer"] and r["year"] > 1980]
+        print(f"✅ Found {len(footballer_results)} footballers born after 1980")
         
         saved_posts = []
         for r in footballer_results:

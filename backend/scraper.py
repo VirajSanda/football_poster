@@ -310,143 +310,179 @@ def _remove_all_duplicates(articles: List[Dict]) -> List[Dict]:
 # FIFA NEWS SCRAPER - ENHANCED WITH API
 # --------------------------------------------------------------------
 def scrape_fifa_news():
-    """Scrape FIFA official news using API"""
+    """Scrape FIFA official news using FIFA+ CXM API (hardened & production-safe)"""
     logger.info("Scraping FIFA news via API...")
-    
-    # FIFA API endpoints
-    api_endpoints = [
+
+    API_ENDPOINTS = [
         {
             "name": "fifa_news",
             "url": "https://cxm-api.fifa.com/fifaplusweb/api/sections/news/1aQDyhkYnKhkAW347zYi4Y",
-            "params": {
-                "locale": "en",
-                "limit": 16,
-                "skip": 0
-            }
+            "params": {"locale": "en", "limit": 16},
+            "paginated": True
         },
         {
             "name": "fifa_promo",
             "url": "https://cxm-api.fifa.com/fifaplusweb/api/sections/promoCarousel/5Gsmpd2GqyvT2CmXv2aBb7",
-            "params": {
-                "locale": "en"
-            }
+            "params": {"locale": "en"},
+            "paginated": False
         },
         {
             "name": "fifa_more_news",
             "url": "https://cxm-api.fifa.com/fifaplusweb/api/sections/news/2lsGSGYOtykcJRJQu7bdDg",
-            "params": {
-                "locale": "en",
-                "limit": 20,
-                "skip": 0
-            }
+            "params": {"locale": "en", "limit": 20},
+            "paginated": True
         }
     ]
-    
-    all_results = []
-    
-    for endpoint in api_endpoints:
-        try:
-            response = requests.get(
-                endpoint["url"],
-                params=endpoint["params"],
-                headers=HEADERS,
-                timeout=15
-            )
-            response.raise_for_status()
-            
-            data = response.json()
-            results = _process_fifa_api_data(data, endpoint["name"])
-            all_results.extend(results)
-            
-            logger.info("Found %d FIFA items from %s", len(results), endpoint["name"])
-            
-        except Exception as e:
-            logger.error("FIFA API fetch failed for %s: %s", endpoint["name"], e)
-            continue
 
-    # Remove duplicates
-    unique_results = []
+    MAX_PAGES = 2
+    all_results = []
+
+    for endpoint in API_ENDPOINTS:
+        pages = MAX_PAGES if endpoint["paginated"] else 1
+
+        for page in range(pages):
+            try:
+                params = endpoint["params"].copy()
+                if endpoint["paginated"]:
+                    params["skip"] = page * params.get("limit", 16)
+
+                response = requests.get(
+                    endpoint["url"],
+                    params=params,
+                    headers=HEADERS,
+                    timeout=15
+                )
+                response.raise_for_status()
+
+                data = response.json()
+                results = _process_fifa_api_data(data, endpoint["name"])
+                all_results.extend(results)
+
+                logger.info(
+                    "FIFA %s page %d: %d items",
+                    endpoint["name"],
+                    page + 1,
+                    len(results)
+                )
+
+                if not results:
+                    break  # stop pagination early
+
+            except Exception as e:
+                logger.error(
+                    "FIFA API fetch failed (%s page %d): %s",
+                    endpoint["name"],
+                    page + 1,
+                    e
+                )
+                break
+
+    # De-duplicate results
     seen_urls = set()
     seen_titles = set()
-    
-    for result in all_results:
-        url = result.get('url', '')
-        title = result.get('title', '').lower().strip()
-        
-        if url and url not in seen_urls and title not in seen_titles:
-            seen_urls.add(url)
-            seen_titles.add(title)
-            unique_results.append(result)
-    
+    unique_results = []
+
+    for article in all_results:
+        url = article.get("url", "").strip()
+        title = article.get("title", "").lower().strip()
+
+        if not url or not title:
+            continue
+
+        if url in seen_urls or title in seen_titles:
+            continue
+
+        seen_urls.add(url)
+        seen_titles.add(title)
+        unique_results.append(article)
+
     logger.info("Total unique FIFA items: %d", len(unique_results))
     return unique_results[:15]
 
+
 def _process_fifa_api_data(data: Dict, source_name: str) -> List[Dict]:
-    """Process FIFA API JSON response into normalized articles"""
+    """Normalize FIFA API responses (news + promoCarousel compatible)"""
     results = []
-    
-    if not data or "items" not in data:
-        logger.debug(f"No 'items' found in FIFA API response for {source_name}")
+
+    if not isinstance(data, dict):
         return results
-    
-    for item in data.get("items", []):
+
+    # Handle schema differences
+    if source_name == "fifa_promo":
+        items = data.get("slides", [])
+    else:
+        items = data.get("items", [])
+
+    if not isinstance(items, list):
+        return results
+
+    for item in items:
         try:
-            # Get title
-            title = item.get("title", "").strip()
-            if not title or len(title) < 5:
+            title = (item.get("title") or "").strip()
+            if len(title) < 5:
                 continue
-            
-            # Get summary/preview text
-            summary = item.get("previewText", "") or item.get("summary", "") or ""
-            summary = summary.strip()
-            
-            # Get slug for URL
-            slug = item.get("slug", "")
-            article_page_url = item.get("articlePageUrl", "")
-            
-            # Construct URL
-            url = ""
+
+            summary = (
+                item.get("previewText")
+                or item.get("summary")
+                or item.get("description")
+                or ""
+            ).strip()
+
+            article_page_url = item.get("articlePageUrl")
+            slug = item.get("slug")
+
+            url = None
             if article_page_url:
-                if article_page_url.startswith('/'):
-                    url = f"https://www.fifa.com{article_page_url}"
-                else:
-                    url = article_page_url
+                url = (
+                    f"https://www.fifa.com{article_page_url}"
+                    if article_page_url.startswith("/")
+                    else article_page_url
+                )
             elif slug:
-                url = f"https://www.fifa.com/en/articles/{slug}"
-            
+                url = f"https://www.fifa.com/fifaplus/en/articles/{slug}"
+
             if not url:
                 continue
-            
-            # Get image
-            image_url = None
-            image_data = item.get("image", {})
-            if image_data:
-                image_url = image_data.get("src")
-            
-            # Get video (if available in future)
-            video_url = None
-            
-            # Filter football content
+
+            image_url = _extract_fifa_image(item)
+
             if not looks_like_football(title, summary, url):
                 continue
-            
-            article_data = {
+
+            article = normalize_article({
                 "title": title[:300],
                 "summary": summary[:500],
                 "url": url,
                 "image_url": image_url,
-                "video_url": video_url,
+                "video_url": None,
                 "source": "FIFA"
-            }
-            
-            normalized_article = normalize_article(article_data)
-            results.append(normalized_article)
-            
+            })
+
+            results.append(article)
+
         except Exception as e:
-            logger.debug("Error processing FIFA API item: %s", e)
-            continue
-    
+            logger.debug("FIFA item processing error: %s", e)
+
     return results
+
+
+def _extract_fifa_image(item: Dict) -> str | None:
+    """Extract FIFA image URL across all known schema variations"""
+    image = item.get("image")
+    if isinstance(image, dict):
+        return image.get("src") or image.get("url")
+
+    images = item.get("images")
+    if isinstance(images, list) and images:
+        return images[0].get("src")
+
+    hero = item.get("heroImage")
+    if isinstance(hero, dict):
+        return hero.get("src")
+
+    return None
+
 # --------------------------------------------------------------------
 # ESPN FC (SOCCER ONLY) - FIXED URL
 # --------------------------------------------------------------------
