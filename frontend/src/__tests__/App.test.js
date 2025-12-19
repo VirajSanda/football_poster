@@ -1,9 +1,14 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
-import App from "../App";
+import { MemoryRouter } from "react-router-dom";
+import App from "./App";
 
-test("renders app and shows brand title", () => {
-  render(<App />);
+test("renders brand title", () => {
+  render(
+    <MemoryRouter initialEntries={["/posts"]}>
+      <App />
+    </MemoryRouter>
+  );
+
   const brand = screen.getByText(/KickOffZone/i);
   expect(brand).toBeInTheDocument();
 });
