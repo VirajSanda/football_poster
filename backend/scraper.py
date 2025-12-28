@@ -912,7 +912,7 @@ def get_next_schedule_time():
     now = datetime.now(timezone.utc)
     
     # Round up to the next even hour
-    next_hour = (now + timedelta(hours=2)).replace(minute=0, second=0, microsecond=0)
+    next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
     
     return next_hour  # Already timezone-aware since now is timezone-aware
 
@@ -945,7 +945,7 @@ def schedule_new_posts(session, dry_run=False):
             # Ensure last_time is timezone aware
             if last_time.tzinfo is None:
                 last_time = last_time.replace(tzinfo=timezone.utc)
-            next_time = last_time + timedelta(hours=2)  # 2-hour intervals
+            next_time = last_time + timedelta(hours=1)  # 1-hour intervals
         else:
             next_time = get_next_schedule_time()
         
