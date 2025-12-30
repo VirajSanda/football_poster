@@ -36,7 +36,7 @@ def download_telegram_file(file_path: str) -> str:
     local_path = os.path.join(TMP_DIR, os.path.basename(file_path))
 
     file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-    r = requests.get(file_url, stream=True, timeout=20)
+    r = requests.get(file_url, stream=True, timeout=30)
     r.raise_for_status()
 
     with open(local_path, "wb") as f:
@@ -72,24 +72,51 @@ def telegram_webhook():
     channel_title = chat.get("title", "Unknown Channel")
 
     print(f"📥 Telegram post from {channel_title} ({channel_id})")
+    print("🔍 Message keys:", list(msg.keys()))
 
-    # Allow only whitelisted channels
+    # ---------------- Channel whitelist ----------------
     if ALLOWED_CHANNELS and channel_id not in ALLOWED_CHANNELS:
         print("🚫 Channel not allowed")
         return jsonify({"status": "ignored_channel"}), 200
 
     caption = (msg.get("caption") or msg.get("text") or "").strip()
+
     photos = msg.get("photo", [])
     video = msg.get("video")
+    document = msg.get("document")
+    video_note = msg.get("video_note")
 
-    media_type = "photo" if photos else "video" if video else None
+    media_type = None
+    file_id = None
+
+    # ---------------- MEDIA DETECTION ----------------
+    if photos:
+        media_type = "photo"
+        file_id = photos[-1]["file_id"]
+
+    elif video:
+        media_type = "video"
+        file_id = video["file_id"]
+
+    elif document and document.get("mime_type", "").startswith("video/"):
+        media_type = "video"
+        file_id = document["file_id"]
+
+    elif video_note:
+        media_type = "video"
+        file_id = video_note["file_id"]
+
+    else:
+        print("⚠️ No supported media found")
+        return jsonify({"status": "no_media"}), 200
+
+    print(f"📦 Detected media type: {media_type}")
 
     # ---------------- DUPLICATE GUARD ----------------
     existing = (
         TelePost.query
         .filter(TelePost.channel_id == channel_id)
         .filter(TelePost.caption == caption)
-        .filter(TelePost.image_path.isnot(None))
         .first()
     )
 
@@ -99,8 +126,7 @@ def telegram_webhook():
 
     try:
         # ---------------- PHOTO ----------------
-        if photos:
-            file_id = photos[-1]["file_id"]
+        if media_type == "photo":
             file_info = telegram_get(f"{TELEGRAM_API}/getFile?file_id={file_id}")
             local_image = download_telegram_file(file_info["file_path"])
 
@@ -111,7 +137,9 @@ def telegram_webhook():
             )
 
             fb_caption = f"{caption}\n\n📢 From {channel_title}"
-            upload_to_facebook(branded_image, fb_caption)
+            fb_result = upload_to_facebook(branded_image, fb_caption)
+
+            print("📘 Facebook image response:", fb_result)
 
             post = TelePost(
                 channel_id=channel_id,
@@ -123,13 +151,14 @@ def telegram_webhook():
             )
 
         # ---------------- VIDEO ----------------
-        elif video:
-            file_id = video["file_id"]
+        elif media_type == "video":
             file_info = telegram_get(f"{TELEGRAM_API}/getFile?file_id={file_id}")
             local_video = download_telegram_file(file_info["file_path"])
 
             fb_caption = f"{caption}\n\n📢 From {channel_title}"
-            upload_video_to_facebook(local_video, fb_caption)
+            fb_result = upload_video_to_facebook(local_video, fb_caption)
+
+            print("📘 Facebook video response:", fb_result)
 
             post = TelePost(
                 channel_id=channel_id,
@@ -139,9 +168,6 @@ def telegram_webhook():
                 status="posted",
                 created_at=datetime.now(timezone.utc)
             )
-
-        else:
-            return jsonify({"status": "no_media"}), 200
 
         db.session.add(post)
         db.session.commit()
