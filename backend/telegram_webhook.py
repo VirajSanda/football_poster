@@ -61,6 +61,7 @@ def cleanup_tmp():
 
 @telegram_bp.route("/telegram_webhook", methods=["POST"])
 def telegram_webhook():
+    print(f"📥 telegram_webhook request {request}")
     payload = request.get_json(silent=True) or {}
     print(f"📥 Payload {payload}")
 
