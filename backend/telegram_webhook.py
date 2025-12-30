@@ -92,10 +92,6 @@ def telegram_webhook():
     logger.info("📢 Channel %s (%s)", channel_title, channel_id)
     logger.info("🔑 Message keys: %s", list(msg.keys()))
 
-    logger.warning("🔐 ALLOWED_CHANNELS ENV RAW = %r", os.getenv("ALLOWED_CHANNELS"))
-    logger.warning("🔐 ALLOWED_CHANNELS PARSED = %s", ALLOWED_CHANNELS)
-    logger.warning("🔐 Incoming channel_id = %r", channel_id)
-
     if ALLOWED_CHANNELS and channel_id not in ALLOWED_CHANNELS:
         logger.warning("🚫 Channel not allowed")
         return jsonify({"status": "ignored_channel"}), 200
@@ -139,7 +135,7 @@ def telegram_webhook():
         file_info = telegram_get(f"{TELEGRAM_API}/getFile?file_id={file_id}")
         local_file = download_telegram_file(file_info["file_path"])
 
-        fb_caption = f"{caption}\n\n📢 From {channel_title}"
+        fb_caption = caption
 
         # -------- PHOTO --------
         if media_type == "photo":
