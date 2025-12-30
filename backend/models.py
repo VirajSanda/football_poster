@@ -12,11 +12,11 @@ class Post(db.Model):
     __tablename__ = "posts"
 
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255), nullable=False)
+    title = db.Column(db.String(512), nullable=False)
     link = db.Column(db.String(500))
     image = db.Column(db.String(255))  # Keep for backward compatibility
     image_data = db.Column(db.LargeBinary, nullable=True)  # Binary image data
-    image_filename = db.Column(db.String(255), nullable=True)
+    image_filename = db.Column(db.Text, nullable=True)
     summary = db.Column(db.Text)
     full_description = db.Column(db.Text)
     hashtags = db.Column(db.String(500))
@@ -109,8 +109,8 @@ class BirthdayPost(db.Model):
     name = db.Column(db.String(255), nullable=False)
     birth_year = db.Column(db.String(10))
     summary = db.Column(db.Text)
-    image = db.Column(db.String(512))
-    title = db.Column(db.String(255))
+    image = db.Column(db.Text)
+    title = db.Column(db.String(512))
     status = db.Column(db.String(50), default="pending")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
