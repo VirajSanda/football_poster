@@ -135,31 +135,23 @@ def telegram_webhook():
         file_info = telegram_get(f"{TELEGRAM_API}/getFile?file_id={file_id}")
         local_file = download_telegram_file(file_info["file_path"])
 
-        fb_caption = caption
-
         # -------- PHOTO --------
         if media_type == "photo":
-            branded = generate_post_image_nocrop(
-                title=caption,
-                image_url=local_file,
-                article_url=""
-            )
-
-            fb_result = upload_to_facebook(branded, fb_caption)
+            fb_result = upload_to_facebook(local_file, caption)
             logger.info("📘 Facebook image response: %s", fb_result)
 
             post = TelePost(
                 channel_id=channel_id,
                 channel_title=channel_title,
                 caption=caption,
-                image_path=branded,
+                image_path=local_file,
                 status="posted",
                 created_at=datetime.now(timezone.utc),
             )
 
         # -------- VIDEO --------
         else:
-            fb_result = upload_video_to_facebook(local_file, fb_caption)
+            fb_result = upload_video_to_facebook(local_file, caption)
             logger.info("📘 Facebook video response: %s", fb_result)
 
             post = TelePost(
