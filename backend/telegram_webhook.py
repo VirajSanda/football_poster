@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from config import Config
 from models import db, TelePost
-from image_generator import generate_post_image_nocrop
 from facebook_poster import upload_to_facebook, upload_video_to_facebook
 
 # --------------------------------------------------
