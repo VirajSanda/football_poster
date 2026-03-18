@@ -1238,7 +1238,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
 
     # Fallback: Simple text post with link in message
     if link:
-        message += f"\n\nRead more: {link}"
+        message += f"\n\n{link}"
 
     # Prepare payload for text post
     post_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/feed"
@@ -1420,7 +1420,6 @@ def run_scraper(dry_run=False):
     # Enhanced missing media detection
     missing_media = check_missing_media(all_articles)
     if missing_media:
-        logger.warning("🚨 Found %d articles without images/videos that need manual attention", len(missing_media))
         for article in missing_media:
             logger.warning("   - %s: %s", article['title'], article['url'])
 
@@ -1463,7 +1462,6 @@ def run_scraper(dry_run=False):
             
             # Check against already scheduled posts
             if is_already_scheduled(session, article['title'], article['url']):
-                logger.warning("Skipping already scheduled post: %s", article['title'])
                 continue
             
             filtered_articles.append(article)
