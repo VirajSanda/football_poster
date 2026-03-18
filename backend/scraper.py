@@ -1238,7 +1238,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
 
     # Fallback: Simple text post with link in message
     if link:
-        message += f"\n\n{link}"
+        message += f"\n\n{link}\n\n"
 
     # Prepare payload for text post
     post_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/feed"

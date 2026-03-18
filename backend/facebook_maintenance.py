@@ -12,7 +12,7 @@ BASE = "https://graph.facebook.com/v25.0"
 PAGE_ID = Config.FACEBOOK_PAGE_ID
 PAGE_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN
 
-REQUEST_DELAY = 0.5
+REQUEST_DELAY = 3
 
 
 # ---------------- Core ---------------- #
@@ -60,10 +60,16 @@ def fix_message_format(message):
     if not url:
         return message
 
-    if url + "\n" in message:
-        return message
+    # Remove "Read more:" or similar prefix
+    message = re.sub(r"(read more:\s*)", "", message, flags=re.IGNORECASE)
 
-    return message.replace(url, url + "\n")
+    # Remove URL from current position
+    message_without_url = message.replace(url, "").strip()
+
+    # Put URL on its own line at TOP (best for preview)
+    new_message = f"\n\n{message_without_url}\n\n{url}\n\n"
+
+    return new_message.strip()
 
 
 def update_post_message(post_id, new_message):
