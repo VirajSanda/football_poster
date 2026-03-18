@@ -893,14 +893,6 @@ def check_missing_media(articles):
                 'source': article.get('source', 'Unknown Source')
             })
     
-    if articles_without_media:
-        logger.warning("🚨 ARTICLES WITHOUT IMAGES/VIDEOS FOUND:")
-        for article in articles_without_media:
-            logger.warning("   - Title: %s", article['title'])
-            logger.warning("     URL: %s", article['url'])
-            logger.warning("     Source: %s", article['source'])
-            logger.warning("     ---")
-    
     return articles_without_media
 
 # --------------------------------------------------------------------
