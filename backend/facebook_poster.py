@@ -17,7 +17,7 @@ def upload_to_facebook(image_path, caption):
     if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
         return {"error": "Facebook credentials not configured"}
 
-    url = f"https://graph.facebook.com/{FACEBOOK_PAGE_ID}/photos"
+    url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/photos"
     files = {'source': open(image_path, 'rb')}
     data = {'caption': caption, 'access_token': FACEBOOK_ACCESS_TOKEN}
 
@@ -158,6 +158,40 @@ def upload_video_to_facebook(video_path, caption):
     response = requests.post(url, files=files, data=data)
     return response.json()
 
+def upload_video_to_facebook_scheduled(video_path, caption):
+    """
+    Upload video as scheduled post (reel safe spacing).
+    """
+
+    if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
+        return {"error": "Facebook credentials not configured"}
+
+    scheduled_dt = get_safe_video_schedule_time()
+
+    url = f"https://graph-video.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
+
+    with open(video_path, "rb") as vid:
+        files = {"source": vid}
+        data = {
+            "access_token": FACEBOOK_ACCESS_TOKEN,
+            "description": caption,
+            "published": "false",
+            "scheduled_publish_time": scheduled_dt.isoformat()
+        }
+
+        response = requests.post(url, files=files, data=data)
+
+    try:
+        res_data = response.json()
+    except Exception:
+        res_data = {"error": "Invalid JSON", "raw": response.text}
+
+    res_data["debug_info"] = {
+        "scheduled_time_final": scheduled_dt.isoformat()
+    }
+
+    return res_data
+
 def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=None, link=None, scheduled_time=None):
     # Final message
     
@@ -222,3 +256,39 @@ def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=No
 
     return result
 
+
+def get_safe_video_schedule_time():
+    """
+    Returns a safe scheduled time ensuring:
+    - At least 30 min gap from last scheduled post
+    - At least 10 min from now (Facebook rule)
+    """
+    try:
+        url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/scheduled_posts"
+        params = {
+            "fields": "scheduled_publish_time",
+            "access_token": FACEBOOK_ACCESS_TOKEN,
+            "limit": 1
+        }
+
+        res = requests.get(url, params=params).json()
+        data = res.get("data", [])
+
+        now_utc = datetime.now(timezone.utc)
+        min_fb_time = now_utc + timedelta(minutes=11)
+
+        if not data:
+            return min_fb_time
+
+        last_time = datetime.fromisoformat(
+            data[0]["scheduled_publish_time"].replace("Z", "+00:00")
+        )
+
+        # enforce 30 min gap
+        next_time = last_time + timedelta(minutes=30)
+
+        return max(next_time, min_fb_time)
+
+    except Exception as e:
+        print(f"[Schedule Error] {e}")
+        return datetime.now(timezone.utc) + timedelta(minutes=11)

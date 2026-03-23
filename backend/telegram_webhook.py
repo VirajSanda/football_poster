@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from config import Config
 from models import db, TelePost
-from facebook_poster import upload_to_facebook, upload_video_to_facebook
+from facebook_poster import upload_to_facebook, upload_video_to_facebook, upload_video_to_facebook_scheduled
 
 # --------------------------------------------------
 # Logging (CRITICAL)
@@ -150,7 +150,7 @@ def telegram_webhook():
 
         # -------- VIDEO --------
         else:
-            fb_result = upload_video_to_facebook(local_file, caption)
+            fb_result = upload_video_to_facebook_scheduled(local_file, caption)
             logger.info("📘 Facebook video response: %s", fb_result)
 
             post = TelePost(
