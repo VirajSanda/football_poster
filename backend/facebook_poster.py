@@ -4,6 +4,7 @@ import json
 from config import Config
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from models import db, TelePost
 # For backward compatibility if needed
 
 load_dotenv()
@@ -167,7 +168,7 @@ def upload_video_to_facebook_scheduled(video_path, caption):
     if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
         return {"error": "Facebook credentials not configured"}
 
-    scheduled_dt_utc = get_safe_video_schedule_time()
+    scheduled_dt_utc = get_safe_video_schedule_time_from_db()
 
     # 🔥 REQUIRED: convert to Unix timestamp
     scheduled_timestamp = int(scheduled_dt_utc.timestamp())
@@ -196,7 +197,7 @@ def upload_video_to_facebook_scheduled(video_path, caption):
     }
 
     return res_data
-    
+
 def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=None, link=None, scheduled_time=None):
     # Final message
     
@@ -261,46 +262,43 @@ def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=No
 
     return result
 
-def get_safe_video_schedule_time():
+def get_safe_video_schedule_time_from_db():
     """
-    Returns safe scheduled time in UTC (datetime),
-    based on Singapore local time logic.
+    Uses DB to enforce 30-min gap between video posts.
+    Works in Singapore timezone.
     """
+
     try:
-        url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/scheduled_posts"
-        params = {
-            "fields": "scheduled_publish_time",
-            "access_token": FACEBOOK_ACCESS_TOKEN,
-            "limit": 1
-        }
-
-        res = requests.get(url, params=params).json()
-        data = res.get("data", [])
-
-        # Work in Singapore time
-        now_sg = datetime.now(SG_TZ)
-
-        # FB requires at least 10 min ahead
-        min_fb_time_sg = now_sg + timedelta(minutes=11)
-
-        if not data:
-            return min_fb_time_sg.astimezone(timezone.utc)
-
-        last_time_utc = datetime.fromisoformat(
-            data[0]["scheduled_publish_time"].replace("Z", "+00:00")
+        # 🔥 Get last VIDEO post (most recent)
+        last_post = (
+            TelePost.query
+            .filter(TelePost.image_path.isnot(None))  # assuming videos saved here too
+            .order_by(TelePost.created_at.desc())
+            .first()
         )
 
-        # Convert last scheduled → Singapore time
+        now_sg = datetime.now(SG_TZ)
+        min_fb_time_sg = now_sg + timedelta(minutes=11)
+
+        if not last_post:
+            return min_fb_time_sg.astimezone(timezone.utc)
+
+        last_time_utc = last_post.created_at
+
+        if last_time_utc.tzinfo is None:
+            last_time_utc = last_time_utc.replace(tzinfo=timezone.utc)
+
+        # convert to SG time
         last_time_sg = last_time_utc.astimezone(SG_TZ)
 
-        # enforce 30 min gap (SG time)
+        # enforce 30 min gap
         next_time_sg = last_time_sg + timedelta(minutes=30)
 
         final_sg = max(next_time_sg, min_fb_time_sg)
 
-        # return as UTC
         return final_sg.astimezone(timezone.utc)
 
     except Exception as e:
-        print(f"[Schedule Error] {e}")
+        print(f"[DB Schedule Error] {e}")
         return (datetime.now(SG_TZ) + timedelta(minutes=11)).astimezone(timezone.utc)
+
