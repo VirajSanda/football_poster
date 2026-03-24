@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID
 FACEBOOK_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN
+SG_TZ = timezone(timedelta(hours=8))
 
 def upload_to_facebook(image_path, caption):
     """
@@ -166,7 +167,10 @@ def upload_video_to_facebook_scheduled(video_path, caption):
     if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
         return {"error": "Facebook credentials not configured"}
 
-    scheduled_dt = get_safe_video_schedule_time()
+    scheduled_dt_utc = get_safe_video_schedule_time()
+
+    # 🔥 REQUIRED: convert to Unix timestamp
+    scheduled_timestamp = int(scheduled_dt_utc.timestamp())
 
     url = f"https://graph-video.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
 
@@ -176,7 +180,7 @@ def upload_video_to_facebook_scheduled(video_path, caption):
             "access_token": FACEBOOK_ACCESS_TOKEN,
             "description": caption,
             "published": "false",
-            "scheduled_publish_time": scheduled_dt.isoformat()
+            "scheduled_publish_time": scheduled_timestamp
         }
 
         response = requests.post(url, files=files, data=data)
@@ -187,11 +191,12 @@ def upload_video_to_facebook_scheduled(video_path, caption):
         res_data = {"error": "Invalid JSON", "raw": response.text}
 
     res_data["debug_info"] = {
-        "scheduled_time_final": scheduled_dt.isoformat()
+        "scheduled_time_utc": scheduled_dt_utc.isoformat(),
+        "scheduled_timestamp": scheduled_timestamp
     }
 
     return res_data
-
+    
 def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=None, link=None, scheduled_time=None):
     # Final message
     
@@ -256,12 +261,10 @@ def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=No
 
     return result
 
-
 def get_safe_video_schedule_time():
     """
-    Returns a safe scheduled time ensuring:
-    - At least 30 min gap from last scheduled post
-    - At least 10 min from now (Facebook rule)
+    Returns safe scheduled time in UTC (datetime),
+    based on Singapore local time logic.
     """
     try:
         url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/scheduled_posts"
@@ -274,21 +277,30 @@ def get_safe_video_schedule_time():
         res = requests.get(url, params=params).json()
         data = res.get("data", [])
 
-        now_utc = datetime.now(timezone.utc)
-        min_fb_time = now_utc + timedelta(minutes=11)
+        # Work in Singapore time
+        now_sg = datetime.now(SG_TZ)
+
+        # FB requires at least 10 min ahead
+        min_fb_time_sg = now_sg + timedelta(minutes=11)
 
         if not data:
-            return min_fb_time
+            return min_fb_time_sg.astimezone(timezone.utc)
 
-        last_time = datetime.fromisoformat(
+        last_time_utc = datetime.fromisoformat(
             data[0]["scheduled_publish_time"].replace("Z", "+00:00")
         )
 
-        # enforce 30 min gap
-        next_time = last_time + timedelta(minutes=30)
+        # Convert last scheduled → Singapore time
+        last_time_sg = last_time_utc.astimezone(SG_TZ)
 
-        return max(next_time, min_fb_time)
+        # enforce 30 min gap (SG time)
+        next_time_sg = last_time_sg + timedelta(minutes=30)
+
+        final_sg = max(next_time_sg, min_fb_time_sg)
+
+        # return as UTC
+        return final_sg.astimezone(timezone.utc)
 
     except Exception as e:
         print(f"[Schedule Error] {e}")
-        return datetime.now(timezone.utc) + timedelta(minutes=11)
+        return (datetime.now(SG_TZ) + timedelta(minutes=11)).astimezone(timezone.utc)
