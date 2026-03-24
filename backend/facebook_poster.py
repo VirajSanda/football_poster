@@ -171,7 +171,7 @@ def upload_video_to_facebook_scheduled(video_path, caption):
     scheduled_dt_utc = get_safe_video_schedule_time_from_db()
 
     # 🔥 REQUIRED: convert to Unix timestamp
-    scheduled_timestamp = int(scheduled_dt_utc.timestamp())
+    scheduled_timestamp = scheduled_dt_utc.isoformat()
 
     url = f"https://graph-video.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
 
