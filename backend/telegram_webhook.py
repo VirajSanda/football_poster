@@ -150,7 +150,7 @@ def telegram_webhook():
 
         # -------- VIDEO --------
         else:
-            fb_result = upload_video_to_facebook_scheduled(local_file, caption)
+            fb_result, scheduled_dt_utc = upload_video_to_facebook_scheduled(local_file, caption)
             logger.info("📘 Facebook video response: %s", fb_result)
 
             post = TelePost(
@@ -159,7 +159,7 @@ def telegram_webhook():
                 caption=caption,
                 image_path=local_file,
                 status="posted",
-                created_at=datetime.now(timezone.utc),
+                created_at=scheduled_dt_utc,
             )
 
         db.session.add(post)

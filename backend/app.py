@@ -1045,15 +1045,7 @@ def start_scraper_scheduler():
                     from scraper import run_scraper
                     run_scraper(dry_run=False)
                     logger.info("✅ Scheduled scraper run completed")
-                    
-                    logger.info("🔄 Starting scheduled fetch news run...")
-                    auto_fetch_news()
-                    logger.info("✅ Scheduled fetch news run completed")
 
-                    # logger.info("🔄 Starting Facebook maintenance...")
-                    # from facebook_maintenance import run_facebook_maintenance
-                    # run_facebook_maintenance(logger)
-                    # logger.info("✅ Facebook maintenance completed")
                 except Exception as e:
                     logger.error(f"❌ Scheduled scraper run failed: {e}")
                 

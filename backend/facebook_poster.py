@@ -260,7 +260,7 @@ def upload_video_to_facebook_scheduled(video_path, caption):
         "scheduled_timestamp": scheduled_timestamp
     }
 
-    return res_data
+    return res_data, scheduled_dt_utc
 
 def get_safe_video_schedule_time_from_db():
     """
