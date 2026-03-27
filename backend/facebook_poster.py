@@ -160,44 +160,6 @@ def upload_video_to_facebook(video_path, caption):
     response = requests.post(url, files=files, data=data)
     return response.json()
 
-def upload_video_to_facebook_scheduled(video_path, caption):
-    """
-    Upload video as scheduled post (reel safe spacing).
-    """
-
-    if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
-        return {"error": "Facebook credentials not configured"}
-
-    scheduled_dt_utc = get_safe_video_schedule_time_from_db()
-
-    # 🔥 REQUIRED: convert to Unix timestamp
-    scheduled_timestamp = scheduled_dt_utc.isoformat()
-
-    url = f"https://graph-video.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
-
-    with open(video_path, "rb") as vid:
-        files = {"source": vid}
-        data = {
-            "access_token": FACEBOOK_ACCESS_TOKEN,
-            "description": caption,
-            "published": "false",
-            "scheduled_publish_time": scheduled_timestamp
-        }
-
-        response = requests.post(url, files=files, data=data)
-
-    try:
-        res_data = response.json()
-    except Exception:
-        res_data = {"error": "Invalid JSON", "raw": response.text}
-
-    res_data["debug_info"] = {
-        "scheduled_time_utc": scheduled_dt_utc.isoformat(),
-        "scheduled_timestamp": scheduled_timestamp
-    }
-
-    return res_data
-
 def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=None, link=None, scheduled_time=None):
     # Final message
     
@@ -261,6 +223,44 @@ def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=No
     result["attached_media_count"] = len(media_items)
 
     return result
+
+def upload_video_to_facebook_scheduled(video_path, caption):
+    """
+    Upload video as scheduled post (reel safe spacing).
+    """
+
+    if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
+        return {"error": "Facebook credentials not configured"}
+
+    scheduled_timestamp = int(scheduled_dt_utc.timestamp())
+    
+    # 🔥 REQUIRED: convert to Unix timestamp
+    scheduled_timestamp = scheduled_dt_utc.isoformat()
+
+    url = f"https://graph-video.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
+
+    with open(video_path, "rb") as vid:
+        files = {"source": vid}
+        data = {
+            "access_token": FACEBOOK_ACCESS_TOKEN,
+            "description": caption,
+            "published": "false",
+            "scheduled_publish_time": scheduled_timestamp
+        }
+
+        response = requests.post(url, files=files, data=data)
+
+    try:
+        res_data = response.json()
+    except Exception:
+        res_data = {"error": "Invalid JSON", "raw": response.text}
+
+    res_data["debug_info"] = {
+        "scheduled_time_utc": scheduled_dt_utc.isoformat(),
+        "scheduled_timestamp": scheduled_timestamp
+    }
+
+    return res_data
 
 def get_safe_video_schedule_time_from_db():
     """
