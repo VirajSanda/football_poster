@@ -58,7 +58,8 @@ AMERICAN_FOOTBALL_KEYWORDS = [
     "kickoff", "onside kick", "hail mary", "playoff", "pro bowl",
     "american football", "gridiron", "first down", "end zone",
     "ncaa football", "college football", "cfb", "xfl", "usfl", "question", 
-    "quiz", "?", "Latest Transfer News", "Transfer Rumours", "Latest football news from Premier League"
+    "quiz", "?", "Latest Transfer News", "Transfer Rumours", 
+    "Latest football news from Premier League", "Tickets"
 ]
 
 def looks_like_football(title: str, summary: str, url: str) -> bool:
