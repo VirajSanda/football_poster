@@ -1077,7 +1077,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
         return {"error": "Facebook credentials not configured"}
 
     # Combine message with title and description
-    message = f"{title}\n\n{summary}\n\n{hashtags}".strip()
+    message = f"{title}\n\n{hashtags}".strip()
 
     # Prepare scheduled time
     scheduled_timestamp = None
@@ -1107,17 +1107,14 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
         try:
             logger.info(f"📹 Processing video from {video_url}")
             
-            # Download the video to temporary file
             response = requests.get(video_url, timeout=30, stream=True)
             if response.status_code == 200:
-                # Create a temporary file for video
                 import tempfile
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
                     for chunk in response.iter_content(chunk_size=8192):
                         temp_file.write(chunk)
                     temp_video_path = temp_file.name
 
-                # Upload video to Facebook
                 video_upload_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
                 
                 with open(temp_video_path, "rb") as video_file:
@@ -1127,17 +1124,14 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                         "access_token": FACEBOOK_ACCESS_TOKEN,
                     }
                     
-                    # Add scheduling if needed
                     if scheduled_timestamp:
                         params["published"] = "false"
                         params["scheduled_publish_time"] = scheduled_timestamp
                     else:
                         params["published"] = "true"
 
-                    # Upload video
                     response = requests.post(video_upload_url, params=params, files=files)
                 
-                # Clean up temp file
                 os.unlink(temp_video_path)
 
                 result = response.json()
@@ -1154,7 +1148,6 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                     return result
                 else:
                     logger.warning(f"❌ Video upload failed: {result}")
-                    # Fall back to image or text post
                     if link:
                         message += f"\n\nWatch video: {link}"
 
@@ -1168,19 +1161,16 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
             if link:
                 message += f"\n\nWatch video: {link}"
 
-    # If we have an IMAGE URL (original functionality)
+    # If we have an IMAGE URL
     if image_url:
         try:
-            # Download the image
             response = requests.get(image_url, timeout=10)
             if response.status_code == 200:
-                # Create a temporary file
                 import tempfile
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
                     temp_file.write(response.content)
                     temp_image_path = temp_file.name
 
-                # Upload image to Facebook
                 photo_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/photos"
                 
                 with open(temp_image_path, "rb") as img:
@@ -1194,13 +1184,11 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                         files=files,
                     )
 
-                # Clean up temp file
                 os.unlink(temp_image_path)
 
                 photo_data = photo_res.json()
 
                 if "id" in photo_data:
-                    # Post with attached image
                     post_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/feed"
                     payload = {
                         "message": message,
@@ -1208,7 +1196,10 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                         "attached_media": json.dumps([{"media_fbid": photo_data["id"]}])
                     }
 
-                    # Add scheduling if needed
+                    # ✅ FIX: include link param if available
+                    if link:
+                        payload["link"] = link
+
                     if scheduled_timestamp:
                         payload["published"] = "false"
                         payload["scheduled_publish_time"] = scheduled_timestamp
@@ -1236,25 +1227,23 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
         except Exception as e:
             logger.warning(f"Image processing failed: {e}, falling back to text post")
 
-    # Fallback: Simple text post with link in message
-    if link:
-        message += f"\n\n{link}\n\n"
-
-    # Prepare payload for text post
+    # Fallback: Proper text post with link parameter
     post_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/feed"
     payload = {
         "message": message,
         "access_token": FACEBOOK_ACCESS_TOKEN,
     }
 
-    # Determine if it's scheduled or immediate
+    # ✅ FIX: use link param instead of appending to message
+    if link:
+        payload["link"] = link
+
     if scheduled_timestamp:
         payload["published"] = "false"
         payload["scheduled_publish_time"] = scheduled_timestamp
     else:
         payload["published"] = "true"
 
-    # Send post request
     response = requests.post(post_url, data=payload)
     try:
         data = response.json()
