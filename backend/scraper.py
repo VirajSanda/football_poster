@@ -935,18 +935,18 @@ def acquire_schedule_lock(session, lock_name="schedule_posts_lock", timeout=10):
     session.execute(text("""
         CREATE TABLE IF NOT EXISTS schedule_lock (
             id INTEGER PRIMARY KEY CHECK (id = 1),
-            locked BOOLEAN NOT NULL DEFAULT 0,
+            locked BOOLEAN NOT NULL DEFAULT FALSE,
             locked_at TIMESTAMP
         )
     """))
-    session.execute(text("INSERT OR IGNORE INTO schedule_lock (id, locked) VALUES (1, 0)"))
+    session.execute(text("INSERT OR IGNORE INTO schedule_lock (id, locked) VALUES (1, FALSE)"))
     session.commit()
 
     # Try to acquire the lock
     res = session.execute(text("""
         UPDATE schedule_lock
-        SET locked = 1, locked_at = CURRENT_TIMESTAMP
-        WHERE id = 1 AND locked = 0
+        SET locked = TRUE, locked_at = CURRENT_TIMESTAMP
+        WHERE id = 1 AND locked = FALSE
     """))
     session.commit()
     return res.rowcount == 1
