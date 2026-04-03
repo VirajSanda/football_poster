@@ -18,6 +18,7 @@ from models import db, FootballNews
 from config import Config
 from app import app
 import pytz
+from sqlalchemy import text
 
 # Facebook Config (add to your .env)
 FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID
@@ -931,22 +932,22 @@ def acquire_schedule_lock(session, lock_name="schedule_posts_lock", timeout=10):
     """Acquire an advisory lock using a database table (works with SQLite/PostgreSQL)."""
     # For SQLite we can use a simple row in a lock table.
     # Create the lock table if it doesn't exist.
-    session.execute("""
+    session.execute(text("""
         CREATE TABLE IF NOT EXISTS schedule_lock (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             locked BOOLEAN NOT NULL DEFAULT 0,
             locked_at TIMESTAMP
         )
-    """)
-    session.execute("INSERT OR IGNORE INTO schedule_lock (id, locked) VALUES (1, 0)")
+    """))
+    session.execute(text("INSERT OR IGNORE INTO schedule_lock (id, locked) VALUES (1, 0)"))
     session.commit()
 
     # Try to acquire the lock
-    res = session.execute("""
+    res = session.execute(text("""
         UPDATE schedule_lock
         SET locked = 1, locked_at = CURRENT_TIMESTAMP
         WHERE id = 1 AND locked = 0
-    """)
+    """))
     session.commit()
     return res.rowcount == 1
 
