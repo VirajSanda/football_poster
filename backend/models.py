@@ -151,12 +151,12 @@ class FootballNews(db.Model):
     url = db.Column(db.Text, unique=True, nullable=False)
     image_url = db.Column(db.Text)
     source = db.Column(db.String(100))
-    published_at = db.Column(db.DateTime, default=datetime.utcnow)
+    published_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     seq = db.Column(db.Integer, index=True)          # sequence number for posting
     posted = db.Column(db.Boolean, default=False)    # posted flag
     hash = db.Column(db.String(64), index=True)      # sha256(title+summary)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    scheduled_time = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))    
+    scheduled_time = db.Column(db.DateTime, nullable=True, index=True)
     posted_at = db.Column(db.DateTime, nullable=True)
     video_url = db.Column(db.String(500), nullable=True) 
 

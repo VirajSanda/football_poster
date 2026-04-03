@@ -31,6 +31,8 @@ logger = logging.getLogger("football-scraper")
 def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
+POST_GAP_HOURS = int(os.environ.get("POST_GAP_HOURS", 2)) 
+
 # Football keywords (SOCCER ONLY - excluding American football)
 FOOTBALL_KEYWORDS = [
     "premier league", "premierleague", "epl", "english premier league",
@@ -62,6 +64,9 @@ AMERICAN_FOOTBALL_KEYWORDS = [
     "Latest football news from Premier League", "Tickets"
 ]
 
+def clean_url(url):
+    return url.split("?")[0].strip()
+
 def looks_like_football(title: str, summary: str, url: str) -> bool:
     """Check if content is about football (soccer) and NOT American football"""
     text = " ".join([title or "", summary or "", url or ""]).lower()
@@ -77,7 +82,7 @@ def normalize_article(item: Dict) -> Dict:
     return {
         "title": (item.get("title") or "").strip(),
         "summary": (item.get("summary") or "").strip(),
-        "url": (item.get("url") or "").strip(),
+        "url": clean_url(item.get("url")),
         "image_url": (item.get("image_url") or "").strip() if item.get("image_url") else None,
         "video_url": (item.get("video_url") or "").strip() if item.get("video_url") else None,
         "source": (item.get("source") or "").strip(),
@@ -400,7 +405,6 @@ def scrape_fifa_news():
     logger.info("Total unique FIFA items: %d", len(unique_results))
     return unique_results[:15]
 
-
 def _process_fifa_api_data(data: Dict, source_name: str) -> List[Dict]:
     """Normalize FIFA API responses (news + promoCarousel compatible)"""
     results = []
@@ -467,7 +471,6 @@ def _process_fifa_api_data(data: Dict, source_name: str) -> List[Dict]:
 
     return results
 
-
 def _extract_fifa_image(item: Dict) -> str | None:
     """Extract FIFA image URL across all known schema variations"""
     image = item.get("image")
@@ -500,7 +503,7 @@ def scrape_espn_fc():
         results = []
         
         # ESPN FC article selectors - updated
-        articles = soup.select('.contentItem, .headlineStack__list-item, article, a[href*="/soccer/"]')
+        articles = soup.select('section.contentItem')
         
         for article in articles[:25]:  # Limit to first 25
             try:
@@ -583,7 +586,7 @@ def scrape_sky_sports():
         results = []
         
         # Sky Sports selectors - updated
-        articles = soup.select('.news-list__item, .article, .news-story, .site-layout__secondary-column a')
+        articles = soup.select('.news-list__item')
         
         for article in articles[:20]:
             try:
@@ -667,7 +670,7 @@ def scrape_bbc_sport():
         results = []
         
         # BBC Sport selectors - more comprehensive
-        articles = soup.select('[data-testid*="card"], .gs-c-promo, .sp-c-promo, .ssrcss-1s51t2k, a[href*="/sport/football/"]')
+        articles = soup.select('[data-testid="card"]')
         
         for article in articles[:25]:
             try:
@@ -839,23 +842,43 @@ def get_recent_facebook_posts(hours=48):
         logger.error("Error fetching Facebook posts: %s", e)
         return []
 
-def is_duplicate_post(title, summary, recent_posts):
-    """Check if a post is duplicate by comparing with recent posts"""
+def is_duplicate_post(title, summary, recent_posts, check_url=None):
+    """Enhanced duplicate check using URL, title, and content signature."""
+    # If we have a URL, check if it was already posted
+    if check_url:
+        for post in recent_posts:
+            if check_url in post.get('message', ''):
+                return True
+
     # Create a signature from title and summary
     signature = f"{title} {summary}".lower().strip()
-    signature_words = set(signature.split()[:10])  # First 10 words as signature
-    
+    signature_words = set(re.findall(r'\b\w+\b', signature))  # word tokens
+    signature_words = {w for w in signature_words if len(w) > 3}  # ignore short words
+
     for post in recent_posts:
         post_message = post.get('message', '').lower()
-        post_words = set(post_message.split()[:10])
-        
-        # Check for significant overlap
-        common_words = signature_words.intersection(post_words)
-        if len(common_words) >= 5:  # If 5+ common words in first 10 words
+        post_words = set(re.findall(r'\b\w+\b', post_message))
+        common = len(signature_words.intersection(post_words))
+        total = len(signature_words.union(post_words))
+        similarity = common / total if total > 0 else 0
+        if similarity > 0.6:   # 60% word overlap
             logger.warning("⚠️ Potential duplicate detected: %s", title)
             return True
-    
     return False
+
+def is_valid_article(a):
+    if not a["title"] or len(a["title"]) < 15:
+        return False
+    
+    if not a["url"] or not a["url"].startswith("http"):
+        return False
+    
+    # avoid junk titles
+    bad_patterns = ["click here", "read more", "subscribe", "sign up"]
+    if any(bp in a["title"].lower() for bp in bad_patterns):
+        return False
+    
+    return True
 
 def get_scheduled_posts(session):
     """Get all scheduled posts that haven't been posted yet"""
@@ -901,102 +924,117 @@ def check_missing_media(articles):
 # --------------------------------------------------------------------
 def get_next_schedule_time():
     """Get the next schedule time (make sure it's timezone aware)"""
-    # Ensure returning timezone-aware datetime
     now = datetime.now(timezone.utc)
-    
-    # Round up to the next even hour
-    next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-    
-    return next_hour  # Already timezone-aware since now is timezone-aware
+    return (now + timedelta(minutes=15)).replace(second=0, microsecond=0)
 
+def acquire_schedule_lock(session, lock_name="schedule_posts_lock", timeout=10):
+    """Acquire an advisory lock using a database table (works with SQLite/PostgreSQL)."""
+    # For SQLite we can use a simple row in a lock table.
+    # Create the lock table if it doesn't exist.
+    session.execute("""
+        CREATE TABLE IF NOT EXISTS schedule_lock (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            locked BOOLEAN NOT NULL DEFAULT 0,
+            locked_at TIMESTAMP
+        )
+    """)
+    session.execute("INSERT OR IGNORE INTO schedule_lock (id, locked) VALUES (1, 0)")
+    session.commit()
+
+    # Try to acquire the lock
+    res = session.execute("""
+        UPDATE schedule_lock
+        SET locked = 1, locked_at = CURRENT_TIMESTAMP
+        WHERE id = 1 AND locked = 0
+    """)
+    session.commit()
+    return res.rowcount == 1
+
+def release_schedule_lock(session):
+    session.execute("UPDATE schedule_lock SET locked = 0 WHERE id = 1")
+    session.commit()
 
 def schedule_new_posts(session, dry_run=False):
-    """Schedule posts with enhanced duplicate checking and media detection"""
+    """Schedule posts with consistent gap (POST_GAP_HOURS) and atomic commits."""
+    if not dry_run:
+        # Acquire lock to prevent concurrent scheduling
+        if not acquire_schedule_lock(session):
+            logger.warning("Another scheduling process is already running. Exiting.")
+            return 0
+
     try:
-        # Get unscheduled, non-posted articles
+        # Get unscheduled, non-posted articles (ordered by seq)
         unscheduled_posts = session.query(FootballNews).filter(
             FootballNews.posted == False,
             FootballNews.scheduled_time.is_(None)
         ).order_by(FootballNews.seq.asc()).all()
-        
+
         if not unscheduled_posts:
             logger.info("No unscheduled posts found")
             return 0
-            
+
         logger.info("Found %d unscheduled posts", len(unscheduled_posts))
-        
-        # Get recent Facebook posts for final duplicate check
+
+        # Get recent Facebook posts for duplicate check
         recent_posts = get_recent_facebook_posts()
-        
-        # Get the last scheduled time or use current time
+
+        # Find the latest scheduled_time (any post, not necessarily posted yet)
         last_scheduled = session.query(FootballNews.scheduled_time).filter(
             FootballNews.scheduled_time.isnot(None)
         ).order_by(FootballNews.scheduled_time.desc()).first()
-        
+
+        now_utc = datetime.now(timezone.utc)
+
         if last_scheduled:
-            last_time = last_scheduled[0]
-            # Ensure last_time is timezone aware
-            if last_time.tzinfo is None:
-                last_time = last_time.replace(tzinfo=timezone.utc)
-            next_time = last_time + timedelta(hours=1)  # 1-hour intervals
+            last_time = ensure_timezone_aware(last_scheduled[0])
+            # Ensure at least POST_GAP_HOURS after the last scheduled post
+            next_time = last_time + timedelta(hours=POST_GAP_HOURS)
+            # If that time is already in the past, start from now + gap
+            if next_time <= now_utc:
+                next_time = now_utc + timedelta(hours=POST_GAP_HOURS)
         else:
-            next_time = get_next_schedule_time()
-        
-        # Ensure next_time is timezone aware
-        if next_time.tzinfo is None:
-            next_time = next_time.replace(tzinfo=timezone.utc)
-        
-        # Ensure next_time is in future (use timezone-aware comparison)
-        now = datetime.now(timezone.utc)
-        if next_time <= now:
-            next_time = get_next_schedule_time()
-            # Ensure get_next_schedule_time returns timezone-aware datetime
-            if next_time.tzinfo is None:
-                next_time = next_time.replace(tzinfo=timezone.utc)
-        
+            # No existing schedules: start from now + gap
+            next_time = now_utc + timedelta(hours=POST_GAP_HOURS)
+
+        # Round up to the nearest minute (optional, avoids millisecond collisions)
+        next_time = next_time.replace(second=0, microsecond=0)
+
         scheduled_count = 0
         seen_titles_in_this_batch = set()
-        
+
         for post in unscheduled_posts:
-            # ENHANCED: Check for near-duplicates in this batch
+            # 1. Check duplicate within this batch (title similarity)
             current_title_lower = post.title.lower().strip()
-            is_duplicate_in_batch = False
-            
-            for seen_title in seen_titles_in_this_batch:
-                # Check if titles are very similar (e.g., 80% similar)
-                similarity = calculate_title_similarity(current_title_lower, seen_title)
-                if similarity > 0.8:  # 80% similarity threshold
-                    logger.warning("⚠️ Skipping duplicate in same batch: %s (similar to: %s)", 
-                                 post.title[:50], seen_title[:50])
-                    is_duplicate_in_batch = True
-                    break
-            
+            is_duplicate_in_batch = any(
+                calculate_title_similarity(current_title_lower, seen_title) > 0.8
+                for seen_title in seen_titles_in_this_batch
+            )
             if is_duplicate_in_batch:
+                logger.warning("⚠️ Skipping duplicate in same batch: %s", post.title[:50])
                 continue
 
-            # Final duplicate check before scheduling
-            if is_duplicate_post(post.title, post.summary or "", recent_posts):
+            # 2. Check against recent Facebook posts
+            if is_duplicate_post(post.title, post.summary or "", recent_posts, post.url):
                 logger.warning("Skipping final duplicate: %s", post.title)
                 continue
-            
+
+            # 3. Check against already scheduled posts (including those scheduled in this run)
+            if is_already_scheduled(session, post.title, post.url):
+                logger.warning("Skipping already scheduled: %s", post.title)
+                continue
+
             seen_titles_in_this_batch.add(current_title_lower)
 
-            # Prepare hashtags
+            # Prepare hashtags and media
             hashtags = get_hashtags_for_source(post.source)
-            
-            # Log media status
+
             if post.video_url:
                 logger.info("🎥 Post has video: %s", post.title)
             elif not post.image_url:
                 logger.warning("📸 Scheduling post WITHOUT MEDIA: %s", post.title)
-            
-            # Schedule Facebook post with media (video takes priority over image)
+
             if not dry_run:
-                # Ensure scheduled_time is timezone aware
-                scheduled_time = next_time
-                if scheduled_time.tzinfo is None:
-                    scheduled_time = scheduled_time.replace(tzinfo=timezone.utc)
-                
+                # Schedule on Facebook
                 result = post_to_facebook_scheduled(
                     title=post.title,
                     summary="",
@@ -1004,42 +1042,41 @@ def schedule_new_posts(session, dry_run=False):
                     image_url=post.image_url,
                     video_url=post.video_url,
                     link=post.url,
-                    scheduled_time=scheduled_time
+                    scheduled_time=next_time
                 )
-                
+
                 if "id" in result:
-                    # Ensure storing timezone-aware datetime to database
-                    post.scheduled_time = scheduled_time
-                    
-                    if post.video_url:
-                        logger.info("✅ Scheduled video post: %s for %s", post.title, next_time)
-                    elif not post.image_url:
-                        logger.warning("✅ Scheduled post WITHOUT MEDIA: %s for %s", post.title, next_time)
-                    else:
-                        logger.info("✅ Scheduled Facebook post with image: %s for %s", post.title, next_time)
+                    # IMPORTANT: persist the scheduled_time immediately
+                    post.scheduled_time = next_time
+                    session.commit()   # commit after each post to avoid race conditions
+                    scheduled_count += 1
+                    logger.info("✅ Scheduled %s: %s at %s",
+                                "video" if post.video_url else "post",
+                                post.title[:50], next_time)
                 else:
-                    logger.error("❌ Failed to schedule Facebook post: %s", result.get("error", "Unknown error"))
-            
-            scheduled_count += 1
-            
-            # Move to next time slot (2-hour gap as requested)
-            next_time = next_time + timedelta(hours=2)
-            # Ensure next_time remains timezone aware
-            if next_time.tzinfo is None:
-                next_time = next_time.replace(tzinfo=timezone.utc)
-        
-        if not dry_run:
-            session.commit()
-        
+                    logger.error("❌ Failed to schedule: %s - %s",
+                                 post.title[:50], result.get("error", "Unknown error"))
+                    # Do NOT commit; this post remains unscheduled and will be retried later
+            else:
+                # Dry run: just log
+                scheduled_count += 1
+                logger.info("DRY: would schedule %s at %s", post.title[:50], next_time)
+
+            # Advance to next time slot (ensure unique timestamps)
+            next_time = next_time + timedelta(hours=POST_GAP_HOURS)
+
         logger.info("Scheduled %d posts", scheduled_count)
         return scheduled_count
-        
+
     except Exception as e:
         logger.error("Error scheduling posts: %s", e, exc_info=True)
         if not dry_run:
             session.rollback()
         return 0
-       
+    finally:
+        if not dry_run:
+            release_schedule_lock(session)
+                 
 def get_hashtags_for_source(source):
     """Generate relevant hashtags based on source"""
     base_hashtags = "#Football #Soccer #FootyNews"
@@ -1287,7 +1324,7 @@ def insert_articles(session, articles, dry_run=False):
         articles = []
 
     normalized = [normalize_article(a) for a in articles]
-    filtered = [a for a in normalized if looks_like_football(a["title"], a["summary"], a["url"])]
+    filtered = [a for a in normalized if is_valid_article(a) and looks_like_football(a["title"], a["summary"], a["url"])]
 
     logger.info("After football filter: %d items", len(filtered))
 
@@ -1444,7 +1481,7 @@ def run_scraper(dry_run=False):
                 continue
             
             # Check against recent Facebook posts
-            if is_duplicate_post(article['title'], article.get('summary', ''), recent_posts):
+            if is_duplicate_post(article['title'], article.get('summary', ''), recent_posts, article.get('url')):
                 logger.warning("Skipping potential duplicate: %s", article['title'])
                 continue
             
@@ -1510,10 +1547,13 @@ def calculate_title_similarity(title1, title2):
 # --------------------------------------------------------------------
 # WORKER FUNCTION
 # --------------------------------------------------------------------
-def run_worker(interval_hours=2):
+def run_worker(interval_hours=None):
     """
     Run scraper in continuous worker mode (2-hour intervals as requested)
     """
+    
+    if interval_hours is None:
+        interval_hours = POST_GAP_HOURS
     logger.info("🚀 Starting football scraper worker (interval: %s hours)", interval_hours)
     interval_seconds = interval_hours * 3600
     
@@ -1538,7 +1578,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Football News Scraper")
     parser.add_argument("--dry-run", action="store_true", help="Do not write to DB or schedule posts")
     parser.add_argument("--worker", action="store_true", help="Run in continuous worker mode")
-    parser.add_argument("--interval", type=int, default=2, help="Worker interval in hours (default: 2)")
+    parser.add_argument("--interval", type=int, default=POST_GAP_HOURS, help="Worker interval in hours (default: 2)")
     
     args = parser.parse_args()
 
