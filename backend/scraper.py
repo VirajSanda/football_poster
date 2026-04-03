@@ -19,6 +19,7 @@ from config import Config
 from app import app
 import pytz
 from sqlalchemy import text
+from sqlalchemy.engine import Engine
 
 # Facebook Config (add to your .env)
 FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID
@@ -930,8 +931,7 @@ def get_next_schedule_time():
 
 def acquire_schedule_lock(session, lock_name="schedule_posts_lock", timeout=10):
     """Acquire an advisory lock using a database table (works with SQLite/PostgreSQL)."""
-    # For SQLite we can use a simple row in a lock table.
-    # Create the lock table if it doesn't exist.
+    # Create the lock table if it doesn't exist
     session.execute(text("""
         CREATE TABLE IF NOT EXISTS schedule_lock (
             id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -939,7 +939,21 @@ def acquire_schedule_lock(session, lock_name="schedule_posts_lock", timeout=10):
             locked_at TIMESTAMP
         )
     """))
-    session.execute(text("INSERT OR IGNORE INTO schedule_lock (id, locked) VALUES (1, FALSE)"))
+    session.commit()
+    
+    # Detect database type
+    db_dialect = session.get_bind().dialect.name if hasattr(session, 'get_bind') else 'sqlite'
+    
+    # Insert initial row using dialect-appropriate syntax
+    if db_dialect == 'postgresql':
+        session.execute(text("""
+            INSERT INTO schedule_lock (id, locked) 
+            VALUES (1, FALSE)
+            ON CONFLICT (id) DO NOTHING
+        """))
+    else:  # SQLite
+        session.execute(text("INSERT OR IGNORE INTO schedule_lock (id, locked) VALUES (1, FALSE)"))
+    
     session.commit()
 
     # Try to acquire the lock
