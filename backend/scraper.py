@@ -929,7 +929,22 @@ def get_next_schedule_time():
     now = datetime.now(timezone.utc)
     return (now + timedelta(minutes=15)).replace(second=0, microsecond=0)
 
-def acquire_schedule_lock(session, lock_name="schedule_posts_lock", timeout=10):
+
+def _parse_db_timestamp(value):
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            try:
+                return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                return None
+    return None
+
+
+def acquire_schedule_lock(session, lock_name="schedule_posts_lock", timeout_minutes=60):
     """Acquire an advisory lock using a database table (works with SQLite/PostgreSQL)."""
     # Create the lock table if it doesn't exist
     session.execute(text("""
@@ -963,10 +978,32 @@ def acquire_schedule_lock(session, lock_name="schedule_posts_lock", timeout=10):
         WHERE id = 1 AND locked = FALSE
     """))
     session.commit()
-    return res.rowcount == 1
+    if res.rowcount == 1:
+        return True
+
+    # If there is an existing lock, check whether it is stale.
+    row = session.execute(text("SELECT locked_at FROM schedule_lock WHERE id = 1")).fetchone()
+    if row and row[0]:
+        locked_at = _parse_db_timestamp(row[0])
+        if locked_at:
+            if locked_at.tzinfo is None:
+                locked_at = locked_at.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            if now - locked_at > timedelta(minutes=timeout_minutes):
+                logger.warning("Stale schedule lock detected (locked_at=%s). Reclaiming...", locked_at.isoformat())
+                res = session.execute(text("""
+                    UPDATE schedule_lock
+                    SET locked = TRUE, locked_at = CURRENT_TIMESTAMP
+                    WHERE id = 1
+                """))
+                session.commit()
+                return res.rowcount == 1
+
+    return False
+
 
 def release_schedule_lock(session):
-    session.execute("UPDATE schedule_lock SET locked = 0 WHERE id = 1")
+    session.execute(text("UPDATE schedule_lock SET locked = FALSE, locked_at = NULL WHERE id = 1"))
     session.commit()
 
 def schedule_new_posts(session, dry_run=False):
