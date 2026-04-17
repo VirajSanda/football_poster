@@ -1155,6 +1155,20 @@ def ensure_timezone_aware(dt_obj):
         return dt_obj.replace(tzinfo=timezone.utc)
     return dt_obj
     
+
+def is_probably_video_url(url: str) -> bool:
+    """Heuristic to avoid treating image asset URLs as videos."""
+    if not url or not isinstance(url, str):
+        return False
+    lower_url = url.lower()
+    if any(lower_url.endswith(ext) for ext in ('.mp4', '.mov', '.webm', '.m3u8', '.flv', '.avi')):
+        return True
+    if 'youtube.com' in lower_url or 'youtu.be' in lower_url or 'vimeo.com' in lower_url:
+        return True
+    if 'facebook.com' in lower_url and '/videos/' in lower_url:
+        return True
+    return False
+
 # --------------------------------------------------------------------
 # FACEBOOK INTEGRATION - UPDATED FOR VIDEO SUPPORT
 # --------------------------------------------------------------------
@@ -1171,6 +1185,8 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
 
     # Prepare scheduled time
     scheduled_timestamp = None
+    scheduled_timestamp_unix = None
+    scheduled_timestamp_iso = None
     if scheduled_time:
         try:
             if isinstance(scheduled_time, str):
@@ -1187,13 +1203,16 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
             if scheduled_dt < now_utc + timedelta(minutes=10):
                 scheduled_dt = now_utc + timedelta(minutes=11)
 
-            scheduled_timestamp = int(scheduled_dt.timestamp())
+            scheduled_dt = scheduled_dt.replace(second=0, microsecond=0)
+            scheduled_timestamp_unix = int(scheduled_dt.timestamp())
+            scheduled_timestamp_iso = scheduled_dt.isoformat()
+            scheduled_timestamp = scheduled_timestamp_unix
 
         except Exception as e:
             return {"error": f"Invalid scheduled_time: {str(e)}"}
 
     # If we have a VIDEO URL, upload it as video (priority over image)
-    if video_url:
+    if video_url and is_probably_video_url(video_url):
         try:
             logger.info(f"📹 Processing video from {video_url}")
             
@@ -1214,9 +1233,9 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                         "access_token": FACEBOOK_ACCESS_TOKEN,
                     }
                     
-                    if scheduled_timestamp:
+                    if scheduled_timestamp_unix:
                         params["published"] = "false"
-                        params["scheduled_publish_time"] = scheduled_timestamp
+                        params["scheduled_publish_time"] = scheduled_timestamp_unix
                     else:
                         params["published"] = "true"
 
@@ -1290,9 +1309,9 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                     if link:
                         payload["link"] = link
 
-                    if scheduled_timestamp:
+                    if scheduled_timestamp_iso:
                         payload["published"] = "false"
-                        payload["scheduled_publish_time"] = scheduled_timestamp
+                        payload["scheduled_publish_time"] = scheduled_timestamp_iso
                     else:
                         payload["published"] = "true"
 
@@ -1328,9 +1347,9 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
     if link:
         payload["link"] = link
 
-    if scheduled_timestamp:
+    if scheduled_timestamp_iso:
         payload["published"] = "false"
-        payload["scheduled_publish_time"] = scheduled_timestamp
+        payload["scheduled_publish_time"] = scheduled_timestamp_iso
     else:
         payload["published"] = "true"
 
