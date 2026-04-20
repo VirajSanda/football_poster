@@ -289,7 +289,7 @@ def create_post():
 @app.route("/approve/<int:post_id>", methods=["POST"])
 def approve_post(post_id):
     try:
-        post = Post.query.get(post_id)
+        post = db.session.get(Post, post_id)
         if not post:
             return jsonify({"status": "error", "message": "Post not found"}), 404
 
@@ -332,7 +332,7 @@ def approve_post(post_id):
 @app.route("/reject/<int:post_id>", methods=["POST"])
 def reject_post(post_id):
     try:
-        post = Post.query.get(post_id)
+        post = db.session.get(Post, post_id)
         if not post:
             return jsonify({"status": "error", "message": "Post not found"}), 404
 
@@ -455,7 +455,7 @@ import traceback
 @app.route('/image/<int:post_id>')
 def get_image(post_id):
     try:
-        post = Post.query.get(post_id)
+        post = db.session.get(Post, post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
@@ -586,7 +586,7 @@ def serve_static(filename):
 @app.route("/delete_post/<int:post_id>", methods=["DELETE"])
 def delete_post(post_id):
     try:
-        post = Post.query.get(post_id)
+        post = db.session.get(Post, post_id)
         if not post:
             return jsonify({"status": "error", "message": "Post not found"}), 404
 
@@ -911,7 +911,7 @@ def birthday_posts():
 @app.route("/reject_post/<int:post_id>", methods=["POST"])
 def reject_post_api(post_id):
     try:
-        post = BirthdayPost.query.get(post_id)
+        post = db.session.get(BirthdayPost, post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
@@ -973,7 +973,7 @@ def birthday_post_direct():
         # 4️⃣ Update status in DB
         post_id = request.form.get("post_id")
         if post_id:
-            bp = BirthdayPost.query.get(int(post_id))
+            bp = db.session.get(BirthdayPost, int(post_id))
             if bp:
                 if "id" in fb_result:     # Facebook success
                     bp.status = "posted"

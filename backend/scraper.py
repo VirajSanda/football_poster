@@ -1098,13 +1098,21 @@ def schedule_new_posts(session, dry_run=False):
                 )
 
                 if "id" in result:
+                    final_scheduled_timestamp = (
+                        result.get("debug_info", {}).get("scheduled_time_final")
+                        if isinstance(result, dict) else None
+                    )
+                    final_scheduled_time = (
+                        datetime.fromtimestamp(final_scheduled_timestamp, tz=timezone.utc)
+                        if final_scheduled_timestamp else next_time
+                    )
                     # IMPORTANT: persist the scheduled_time immediately
-                    post.scheduled_time = next_time
+                    post.scheduled_time = final_scheduled_time
                     session.commit()   # commit after each post to avoid race conditions
                     scheduled_count += 1
                     logger.info("✅ Scheduled %s: %s at %s",
                                 "video" if post.video_url else "post",
-                                post.title[:50], next_time)
+                                post.title[:50], final_scheduled_time)
                 else:
                     logger.error("❌ Failed to schedule: %s - %s",
                                  post.title[:50], result.get("error", "Unknown error"))
@@ -1154,6 +1162,30 @@ def ensure_timezone_aware(dt_obj):
     if dt_obj.tzinfo is None:
         return dt_obj.replace(tzinfo=timezone.utc)
     return dt_obj
+
+
+def normalize_scheduled_time_for_facebook(scheduled_time):
+    """Clamp scheduled publish times into Facebook's accepted UTC window."""
+    if not scheduled_time:
+        return None, None
+
+    if isinstance(scheduled_time, str):
+        scheduled_dt = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
+    else:
+        scheduled_dt = scheduled_time
+
+    scheduled_dt = ensure_timezone_aware(scheduled_dt).astimezone(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    min_publish_time = now_utc + timedelta(minutes=11)
+    max_publish_time = now_utc + timedelta(days=75) - timedelta(minutes=1)
+
+    if scheduled_dt < min_publish_time:
+        scheduled_dt = min_publish_time
+    elif scheduled_dt > max_publish_time:
+        scheduled_dt = max_publish_time
+
+    scheduled_dt = scheduled_dt.replace(second=0, microsecond=0)
+    return scheduled_dt, int(scheduled_dt.timestamp())
     
 
 def is_probably_video_url(url: str) -> bool:
@@ -1186,26 +1218,11 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
     # Prepare scheduled time
     scheduled_timestamp = None
     scheduled_timestamp_unix = None
+    scheduled_dt = None
     if scheduled_time:
         try:
-            if isinstance(scheduled_time, str):
-                scheduled_dt = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
-            else:
-                scheduled_dt = scheduled_time
-
-            if scheduled_dt.tzinfo is None:
-                scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
-
-            now_utc = datetime.now(timezone.utc)
-
-            # Facebook requires at least 10 minutes ahead
-            if scheduled_dt < now_utc + timedelta(minutes=10):
-                scheduled_dt = now_utc + timedelta(minutes=11)
-
-            scheduled_dt = scheduled_dt.replace(second=0, microsecond=0)
-            scheduled_timestamp_unix = int(scheduled_dt.timestamp())
+            scheduled_dt, scheduled_timestamp_unix = normalize_scheduled_time_for_facebook(scheduled_time)
             scheduled_timestamp = scheduled_timestamp_unix
-
         except Exception as e:
             return {"error": f"Invalid scheduled_time: {str(e)}"}
 
@@ -1247,6 +1264,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                     logger.info("✅ Successfully scheduled video post")
                     result["debug_info"] = {
                         "scheduled_time_final": scheduled_timestamp,
+                        "scheduled_time_iso": scheduled_dt.isoformat() if scheduled_dt else None,
                         "message": message,
                         "published": params.get("published"),
                         "media_type": "video",
@@ -1318,6 +1336,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                     
                     result["debug_info"] = {
                         "scheduled_time_final": scheduled_timestamp,
+                        "scheduled_time_iso": scheduled_dt.isoformat() if scheduled_dt else None,
                         "message": message,
                         "published": payload.get("published"),
                         "media_type": "image"
@@ -1359,6 +1378,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
 
     data["debug_info"] = {
         "scheduled_time_final": scheduled_timestamp,
+        "scheduled_time_iso": scheduled_dt.isoformat() if scheduled_dt else None,
         "message": message,
         "published": payload.get("published"),
         "media_type": "text_only"

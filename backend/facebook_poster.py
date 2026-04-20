@@ -12,6 +12,34 @@ FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID
 FACEBOOK_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN
 SG_TZ = timezone(timedelta(hours=8))
 
+
+def _normalize_scheduled_time_for_facebook(scheduled_time):
+    """Clamp scheduled publish times into Facebook's accepted UTC window."""
+    if not scheduled_time:
+        return None, None
+
+    if isinstance(scheduled_time, str):
+        scheduled_dt = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
+    else:
+        scheduled_dt = scheduled_time
+
+    if scheduled_dt.tzinfo is None:
+        scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
+    else:
+        scheduled_dt = scheduled_dt.astimezone(timezone.utc)
+
+    now_utc = datetime.now(timezone.utc)
+    min_publish_time = now_utc + timedelta(minutes=11)
+    max_publish_time = now_utc + timedelta(days=75) - timedelta(minutes=1)
+
+    if scheduled_dt < min_publish_time:
+        scheduled_dt = min_publish_time
+    elif scheduled_dt > max_publish_time:
+        scheduled_dt = max_publish_time
+
+    scheduled_dt = scheduled_dt.replace(second=0, microsecond=0)
+    return scheduled_dt, int(scheduled_dt.timestamp())
+
 def upload_to_facebook(image_path, caption):
     """
     Upload a local image to Facebook Page.
@@ -52,10 +80,11 @@ def post_to_facebook(title, summary="", hashtags=None, image_path=None):
 
     return upload_to_facebook(image_path, caption)
 
-def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=None, scheduled_time=None):
+def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_url=None, link=None, scheduled_time=None):
     """
     Posts to Facebook Page feed — can be scheduled or published immediately.
-    Auto-adjusts time if too early (<10 min).
+    Normalizes schedule times to a Facebook-safe UTC window.
+    Handles image_url and video_url by downloading if necessary.
     """
 
     if not FACEBOOK_PAGE_ID or not FACEBOOK_ACCESS_TOKEN:
@@ -63,29 +92,82 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
 
     # Combine message
     message = f"{title}\n\n{summary}\n\n{hashtags}".strip()
-
-    # Prepare scheduled time (convert to UTC and ensure it's valid)
+    scheduled_dt_utc = None
     scheduled_timestamp = None
+
     if scheduled_time:
         try:
-            if isinstance(scheduled_time, str):
-                scheduled_dt = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
-            else:
-                scheduled_dt = scheduled_time
-
-            if scheduled_dt.tzinfo is None:
-                scheduled_dt = scheduled_dt.replace(tzinfo=timezone.utc)
-
-            now_utc = datetime.now(timezone.utc)
-
-            # Facebook requires at least 10 minutes ahead
-            if scheduled_dt < now_utc + timedelta(minutes=10):
-                scheduled_dt = now_utc + timedelta(minutes=11)
-
-            scheduled_timestamp = int(scheduled_dt.timestamp())
-
+            scheduled_dt_utc, scheduled_timestamp = _normalize_scheduled_time_for_facebook(scheduled_time)
         except Exception as e:
             return {"error": f"Invalid scheduled_time: {str(e)}"}
+
+    # Handle video first
+    if video_url:
+        import tempfile
+        import requests
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as f:
+                response = requests.get(video_url, timeout=30)
+                response.raise_for_status()
+                f.write(response.content)
+                video_path = f.name
+
+            url = f"https://graph-video.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
+            with open(video_path, "rb") as vid:
+                files = {"source": vid}
+                data = {
+                    "access_token": FACEBOOK_ACCESS_TOKEN,
+                    "description": message,
+                    "published": "false" if scheduled_dt_utc else "true"
+                }
+                if scheduled_dt_utc:
+                    data["scheduled_publish_time"] = scheduled_timestamp
+
+                response = requests.post(url, files=files, data=data)
+
+            try:
+                res_data = response.json()
+            except Exception:
+                res_data = {"error": "Invalid JSON", "raw": response.text}
+
+            # Clean up temp file
+            try:
+                os.unlink(video_path)
+            except:
+                pass
+
+            res_data["debug_info"] = {
+                "scheduled_time_final": scheduled_timestamp,
+                "scheduled_time_iso": scheduled_dt_utc.isoformat() if scheduled_dt_utc else None,
+                "message": message,
+                "published": data.get("published"),
+                "media_type": "video",
+                "video_url": video_url,
+            }
+
+            return res_data
+
+        except Exception as e:
+            return {"error": f"Failed to handle video: {str(e)}"}
+
+    # Handle image download if URL
+    image_path = None
+    if image_url:
+        if os.path.exists(image_url):
+            image_path = image_url
+        else:
+            # Assume URL, download
+            import tempfile
+            import requests
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as f:
+                    response = requests.get(image_url, timeout=10)
+                    response.raise_for_status()
+                    f.write(response.content)
+                    image_path = f.name
+            except Exception as e:
+                print(f"Failed to download image: {e}")
+                image_path = None
 
     # Prepare payload
     url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/feed"
@@ -140,6 +222,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
 
     data["debug_info"] = {
         "scheduled_time_final": scheduled_timestamp,
+        "scheduled_time_iso": scheduled_dt_utc.isoformat() if scheduled_dt_utc else None,
         "message": message,
         "published": payload.get("published"),
     }
@@ -170,17 +253,10 @@ def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=No
     message = f"{title}\n\n{summary}\n\n{hashtags}".strip()
 
     # Handle scheduled posting
+    scheduled_dt_utc = None
     scheduled_timestamp = None
     if scheduled_time:
-        dt = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-
-        now_utc = datetime.now(timezone.utc)
-        if dt < now_utc + timedelta(minutes=10):
-            dt = now_utc + timedelta(minutes=11)
-
-        scheduled_timestamp = int(dt.timestamp())
+        scheduled_dt_utc, scheduled_timestamp = _normalize_scheduled_time_for_facebook(scheduled_time)
 
     # 1️⃣ Upload photos as unpublished
     media_items = []
@@ -221,6 +297,11 @@ def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=No
     res = requests.post(feed_url, data=payload)
     result = res.json()
     result["attached_media_count"] = len(media_items)
+    result["debug_info"] = {
+        "scheduled_time_final": scheduled_timestamp,
+        "scheduled_time_iso": scheduled_dt_utc.isoformat() if scheduled_dt_utc else None,
+        "published": payload.get("published"),
+    }
 
     return result
 
