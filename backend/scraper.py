@@ -1015,6 +1015,13 @@ def schedule_new_posts(session, dry_run=False):
             return 0
 
     try:
+        repaired_count, cleared_count = repair_stored_scheduled_times(session)
+        if repaired_count or cleared_count:
+            logger.info(
+                "Using repaired schedule state before creating new slots (updated=%d, cleared=%d)",
+                repaired_count, cleared_count
+            )
+
         # Get unscheduled, non-posted articles (ordered by seq)
         unscheduled_posts = session.query(FootballNews).filter(
             FootballNews.posted == False,
@@ -1035,18 +1042,18 @@ def schedule_new_posts(session, dry_run=False):
             FootballNews.scheduled_time.isnot(None)
         ).order_by(FootballNews.scheduled_time.desc()).first()
 
-        now_utc = datetime.now(timezone.utc)
+        min_publish_time, _ = get_facebook_schedule_window()
 
         if last_scheduled:
             last_time = ensure_timezone_aware(last_scheduled[0])
             # Ensure at least POST_GAP_HOURS after the last scheduled post
             next_time = last_time + timedelta(hours=POST_GAP_HOURS)
-            # If that time is already in the past, start from now + gap
-            if next_time <= now_utc:
-                next_time = now_utc + timedelta(hours=POST_GAP_HOURS)
+            # If that time is already too early, start from Facebook's next valid slot
+            if next_time <= min_publish_time:
+                next_time = min_publish_time
         else:
-            # No existing schedules: start from now + gap
-            next_time = now_utc + timedelta(hours=POST_GAP_HOURS)
+            # No existing schedules: start from Facebook's next valid slot
+            next_time = min_publish_time
 
         # Round up to the nearest minute (optional, avoids millisecond collisions)
         next_time = next_time.replace(second=0, microsecond=0)
@@ -1186,6 +1193,67 @@ def normalize_scheduled_time_for_facebook(scheduled_time):
 
     scheduled_dt = scheduled_dt.replace(second=0, microsecond=0)
     return scheduled_dt, int(scheduled_dt.timestamp())
+
+
+def get_facebook_schedule_window():
+    """Return the current UTC window accepted by Facebook for scheduled posts."""
+    now_utc = datetime.now(timezone.utc)
+    min_publish_time = (now_utc + timedelta(minutes=11)).replace(second=0, microsecond=0)
+    max_publish_time = (now_utc + timedelta(days=75) - timedelta(minutes=1)).replace(second=0, microsecond=0)
+    return min_publish_time, max_publish_time
+
+
+def repair_stored_scheduled_times(session):
+    """
+    Normalize stored scheduled times so stale values do not poison new scheduling.
+    Keeps ordering stable where possible and clears overflow rows that cannot fit
+    inside Facebook's scheduling window anymore.
+    """
+    scheduled_posts = session.query(FootballNews).filter(
+        FootballNews.posted == False,
+        FootballNews.scheduled_time.isnot(None)
+    ).order_by(FootballNews.scheduled_time.asc(), FootballNews.seq.asc(), FootballNews.id.asc()).all()
+
+    if not scheduled_posts:
+        return 0, 0
+
+    min_publish_time, max_publish_time = get_facebook_schedule_window()
+    next_allowed_time = min_publish_time
+    updated_count = 0
+    cleared_count = 0
+
+    for post in scheduled_posts:
+        original_time = ensure_timezone_aware(post.scheduled_time)
+        desired_time = original_time if original_time and original_time > next_allowed_time else next_allowed_time
+        desired_time = desired_time.replace(second=0, microsecond=0)
+
+        if desired_time > max_publish_time:
+            logger.warning(
+                "🧹 Clearing out-of-window scheduled_time for post %s (id=%s): %s",
+                post.title[:50], post.id, original_time
+            )
+            post.scheduled_time = None
+            cleared_count += 1
+            continue
+
+        if original_time != desired_time:
+            logger.info(
+                "🧹 Repairing scheduled_time for post %s (id=%s): %s -> %s",
+                post.title[:50], post.id, original_time, desired_time
+            )
+            post.scheduled_time = desired_time
+            updated_count += 1
+
+        next_allowed_time = post.scheduled_time + timedelta(hours=POST_GAP_HOURS)
+
+    if updated_count or cleared_count:
+        session.commit()
+        logger.info(
+            "✅ Repaired stored scheduled times: updated=%d cleared=%d",
+            updated_count, cleared_count
+        )
+
+    return updated_count, cleared_count
     
 
 def is_probably_video_url(url: str) -> bool:
