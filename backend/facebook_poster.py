@@ -82,7 +82,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
             if scheduled_dt < now_utc + timedelta(minutes=10):
                 scheduled_dt = now_utc + timedelta(minutes=11)
 
-            scheduled_timestamp = scheduled_dt.isoformat()
+            scheduled_timestamp = int(scheduled_dt.timestamp())
 
         except Exception as e:
             return {"error": f"Invalid scheduled_time: {str(e)}"}
@@ -99,7 +99,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_path=None, link=N
         payload["link"] = link
 
     # Determine if it's scheduled or immediate
-    if scheduled_timestamp:
+    if scheduled_timestamp is not None:
         payload["published"] = "false"
         payload["scheduled_publish_time"] = scheduled_timestamp
     else:
@@ -180,7 +180,7 @@ def post_multiple_to_facebook_scheduled(title, summary, hashtags, image_paths=No
         if dt < now_utc + timedelta(minutes=10):
             dt = now_utc + timedelta(minutes=11)
 
-        scheduled_timestamp = dt.isoformat()
+        scheduled_timestamp = int(dt.timestamp())
 
     # 1️⃣ Upload photos as unpublished
     media_items = []

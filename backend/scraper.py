@@ -1186,7 +1186,6 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
     # Prepare scheduled time
     scheduled_timestamp = None
     scheduled_timestamp_unix = None
-    scheduled_timestamp_iso = None
     if scheduled_time:
         try:
             if isinstance(scheduled_time, str):
@@ -1205,7 +1204,6 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
 
             scheduled_dt = scheduled_dt.replace(second=0, microsecond=0)
             scheduled_timestamp_unix = int(scheduled_dt.timestamp())
-            scheduled_timestamp_iso = scheduled_dt.isoformat()
             scheduled_timestamp = scheduled_timestamp_unix
 
         except Exception as e:
@@ -1309,9 +1307,9 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                     if link:
                         payload["link"] = link
 
-                    if scheduled_timestamp_iso:
+                    if scheduled_timestamp_unix:
                         payload["published"] = "false"
-                        payload["scheduled_publish_time"] = scheduled_timestamp_iso
+                        payload["scheduled_publish_time"] = scheduled_timestamp_unix
                     else:
                         payload["published"] = "true"
 
@@ -1347,9 +1345,9 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
     if link:
         payload["link"] = link
 
-    if scheduled_timestamp_iso:
+    if scheduled_timestamp_unix:
         payload["published"] = "false"
-        payload["scheduled_publish_time"] = scheduled_timestamp_iso
+        payload["scheduled_publish_time"] = scheduled_timestamp_unix
     else:
         payload["published"] = "true"
 
