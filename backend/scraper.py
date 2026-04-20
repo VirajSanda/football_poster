@@ -1121,8 +1121,12 @@ def schedule_new_posts(session, dry_run=False):
                                 "video" if post.video_url else "post",
                                 post.title[:50], final_scheduled_time)
                 else:
-                    logger.error("❌ Failed to schedule: %s - %s",
-                                 post.title[:50], result.get("error", "Unknown error"))
+                    logger.error(
+                        "❌ Failed to schedule: %s - %s | debug=%s",
+                        post.title[:50],
+                        result.get("error", "Unknown error"),
+                        result.get("debug_info") if isinstance(result, dict) else None,
+                    )
                     # Do NOT commit; this post remains unscheduled and will be retried later
             else:
                 # Dry run: just log
@@ -1171,6 +1175,18 @@ def ensure_timezone_aware(dt_obj):
     return dt_obj
 
 
+def ceil_to_next_minute(dt_obj):
+    """Round a datetime up to the next whole minute unless already exact."""
+    if dt_obj.second == 0 and dt_obj.microsecond == 0:
+        return dt_obj
+    return (dt_obj + timedelta(minutes=1)).replace(second=0, microsecond=0)
+
+
+def floor_to_minute(dt_obj):
+    """Round a datetime down to the current whole minute."""
+    return dt_obj.replace(second=0, microsecond=0)
+
+
 def normalize_scheduled_time_for_facebook(scheduled_time):
     """Clamp scheduled publish times into Facebook's accepted UTC window."""
     if not scheduled_time:
@@ -1183,23 +1199,23 @@ def normalize_scheduled_time_for_facebook(scheduled_time):
 
     scheduled_dt = ensure_timezone_aware(scheduled_dt).astimezone(timezone.utc)
     now_utc = datetime.now(timezone.utc)
-    min_publish_time = now_utc + timedelta(minutes=11)
-    max_publish_time = now_utc + timedelta(days=75) - timedelta(minutes=1)
+    min_publish_time = ceil_to_next_minute(now_utc + timedelta(minutes=11))
+    max_publish_time = floor_to_minute(now_utc + timedelta(days=75) - timedelta(minutes=1))
 
     if scheduled_dt < min_publish_time:
         scheduled_dt = min_publish_time
     elif scheduled_dt > max_publish_time:
         scheduled_dt = max_publish_time
 
-    scheduled_dt = scheduled_dt.replace(second=0, microsecond=0)
+    scheduled_dt = floor_to_minute(scheduled_dt)
     return scheduled_dt, int(scheduled_dt.timestamp())
 
 
 def get_facebook_schedule_window():
     """Return the current UTC window accepted by Facebook for scheduled posts."""
     now_utc = datetime.now(timezone.utc)
-    min_publish_time = (now_utc + timedelta(minutes=11)).replace(second=0, microsecond=0)
-    max_publish_time = (now_utc + timedelta(days=75) - timedelta(minutes=1)).replace(second=0, microsecond=0)
+    min_publish_time = ceil_to_next_minute(now_utc + timedelta(minutes=11))
+    max_publish_time = floor_to_minute(now_utc + timedelta(days=75) - timedelta(minutes=1))
     return min_publish_time, max_publish_time
 
 
@@ -1307,7 +1323,7 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
                         temp_file.write(chunk)
                     temp_video_path = temp_file.name
 
-                video_upload_url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
+                video_upload_url = f"https://graph-video.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
                 
                 with open(temp_video_path, "rb") as video_file:
                     files = {"source": video_file}

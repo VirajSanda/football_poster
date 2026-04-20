@@ -13,6 +13,18 @@ FACEBOOK_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN
 SG_TZ = timezone(timedelta(hours=8))
 
 
+def _ceil_to_next_minute(dt_obj):
+    """Round a datetime up to the next whole minute unless already exact."""
+    if dt_obj.second == 0 and dt_obj.microsecond == 0:
+        return dt_obj
+    return (dt_obj + timedelta(minutes=1)).replace(second=0, microsecond=0)
+
+
+def _floor_to_minute(dt_obj):
+    """Round a datetime down to the current whole minute."""
+    return dt_obj.replace(second=0, microsecond=0)
+
+
 def _normalize_scheduled_time_for_facebook(scheduled_time):
     """Clamp scheduled publish times into Facebook's accepted UTC window."""
     if not scheduled_time:
@@ -29,15 +41,15 @@ def _normalize_scheduled_time_for_facebook(scheduled_time):
         scheduled_dt = scheduled_dt.astimezone(timezone.utc)
 
     now_utc = datetime.now(timezone.utc)
-    min_publish_time = now_utc + timedelta(minutes=11)
-    max_publish_time = now_utc + timedelta(days=75) - timedelta(minutes=1)
+    min_publish_time = _ceil_to_next_minute(now_utc + timedelta(minutes=11))
+    max_publish_time = _floor_to_minute(now_utc + timedelta(days=75) - timedelta(minutes=1))
 
     if scheduled_dt < min_publish_time:
         scheduled_dt = min_publish_time
     elif scheduled_dt > max_publish_time:
         scheduled_dt = max_publish_time
 
-    scheduled_dt = scheduled_dt.replace(second=0, microsecond=0)
+    scheduled_dt = _floor_to_minute(scheduled_dt)
     return scheduled_dt, int(scheduled_dt.timestamp())
 
 def upload_to_facebook(image_path, caption):
