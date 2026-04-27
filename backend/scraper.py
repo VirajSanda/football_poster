@@ -1260,7 +1260,7 @@ def repair_stored_scheduled_times(session):
             post.scheduled_time = desired_time
             updated_count += 1
 
-        next_allowed_time = post.scheduled_time + timedelta(hours=POST_GAP_HOURS)
+        next_allowed_time = ensure_timezone_aware(post.scheduled_time) + timedelta(hours=POST_GAP_HOURS)
 
     if updated_count or cleared_count:
         session.commit()
@@ -1369,6 +1369,10 @@ def post_to_facebook_scheduled(title, summary, hashtags, image_url=None, video_u
             logger.warning(f"Video processing failed: {e}, falling back to image/text post")
             if link:
                 message += f"\n\nWatch video: {link}"
+
+    # Ensure link is in message if not already
+    if link and link not in message:
+        message += f"\n\n{link}"
 
     # If we have an IMAGE URL
     if image_url:
