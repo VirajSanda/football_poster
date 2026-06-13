@@ -41,8 +41,10 @@ def _normalize_scheduled_time_for_facebook(scheduled_time):
         scheduled_dt = scheduled_dt.astimezone(timezone.utc)
 
     now_utc = datetime.now(timezone.utc)
-    min_publish_time = _ceil_to_next_minute(now_utc + timedelta(minutes=11))
-    max_publish_time = _floor_to_minute(now_utc + timedelta(days=75) - timedelta(minutes=1))
+    # Use a wider safety margin (15 min instead of 11) to absorb clock drift / delays
+    min_publish_time = _ceil_to_next_minute(now_utc + timedelta(minutes=15))
+    # Use 74 days instead of 75 to give margin against FB's exact boundary check
+    max_publish_time = _floor_to_minute(now_utc + timedelta(days=74))
 
     if scheduled_dt < min_publish_time:
         scheduled_dt = min_publish_time

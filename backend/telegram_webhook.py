@@ -33,6 +33,8 @@ TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 def telegram_get(url: str, timeout=15):
     logger.info("➡️ Telegram GET %s", url)
     r = requests.get(url, timeout=timeout)
+    if not r.ok:
+        logger.error("Telegram API error body: %s", r.text)
     r.raise_for_status()
     data = r.json()
     if not data.get("ok"):
