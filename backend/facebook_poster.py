@@ -11,6 +11,8 @@ load_dotenv()
 FACEBOOK_PAGE_ID = Config.FACEBOOK_PAGE_ID
 FACEBOOK_ACCESS_TOKEN = Config.FACEBOOK_ACCESS_TOKEN
 SG_TZ = timezone(timedelta(hours=8))
+FACEBOOK_SCHEDULE_MIN_MINUTES = int(os.environ.get("FACEBOOK_SCHEDULE_MIN_MINUTES", 15))
+FACEBOOK_SCHEDULE_MAX_DAYS = int(os.environ.get("FACEBOOK_SCHEDULE_MAX_DAYS", 29))
 
 
 def _ceil_to_next_minute(dt_obj):
@@ -41,10 +43,8 @@ def _normalize_scheduled_time_for_facebook(scheduled_time):
         scheduled_dt = scheduled_dt.astimezone(timezone.utc)
 
     now_utc = datetime.now(timezone.utc)
-    # Use a wider safety margin (15 min instead of 11) to absorb clock drift / delays
-    min_publish_time = _ceil_to_next_minute(now_utc + timedelta(minutes=15))
-    # Use 74 days instead of 75 to give margin against FB's exact boundary check
-    max_publish_time = _floor_to_minute(now_utc + timedelta(days=74))
+    min_publish_time = _ceil_to_next_minute(now_utc + timedelta(minutes=FACEBOOK_SCHEDULE_MIN_MINUTES))
+    max_publish_time = _floor_to_minute(now_utc + timedelta(days=FACEBOOK_SCHEDULE_MAX_DAYS))
 
     if scheduled_dt < min_publish_time:
         scheduled_dt = min_publish_time

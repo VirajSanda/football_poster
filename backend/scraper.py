@@ -33,7 +33,9 @@ logger = logging.getLogger("football-scraper")
 def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
-POST_GAP_HOURS = int(os.environ.get("POST_GAP_HOURS", 2)) 
+POST_GAP_HOURS = int(os.environ.get("POST_GAP_HOURS", 2))
+FACEBOOK_SCHEDULE_MIN_MINUTES = int(os.environ.get("FACEBOOK_SCHEDULE_MIN_MINUTES", 15))
+FACEBOOK_SCHEDULE_MAX_DAYS = int(os.environ.get("FACEBOOK_SCHEDULE_MAX_DAYS", 29))
 
 # Football keywords (SOCCER ONLY - excluding American football)
 FOOTBALL_KEYWORDS = [
@@ -1042,7 +1044,7 @@ def schedule_new_posts(session, dry_run=False):
             FootballNews.scheduled_time.isnot(None)
         ).order_by(FootballNews.scheduled_time.desc()).first()
 
-        min_publish_time, _ = get_facebook_schedule_window()
+        min_publish_time, max_publish_time = get_facebook_schedule_window()
 
         if last_scheduled:
             last_time = ensure_timezone_aware(last_scheduled[0])
@@ -1062,6 +1064,13 @@ def schedule_new_posts(session, dry_run=False):
         seen_titles_in_this_batch = set()
 
         for post in unscheduled_posts:
+            if next_time > max_publish_time:
+                logger.warning(
+                    "Reached Facebook scheduling window limit (%s); leaving remaining posts unscheduled.",
+                    max_publish_time.isoformat(),
+                )
+                break
+
             # 1. Check duplicate within this batch (title similarity)
             current_title_lower = post.title.lower().strip()
             is_duplicate_in_batch = any(
@@ -1199,8 +1208,8 @@ def normalize_scheduled_time_for_facebook(scheduled_time):
 
     scheduled_dt = ensure_timezone_aware(scheduled_dt).astimezone(timezone.utc)
     now_utc = datetime.now(timezone.utc)
-    min_publish_time = ceil_to_next_minute(now_utc + timedelta(minutes=11))
-    max_publish_time = floor_to_minute(now_utc + timedelta(days=75) - timedelta(minutes=1))
+    min_publish_time = ceil_to_next_minute(now_utc + timedelta(minutes=FACEBOOK_SCHEDULE_MIN_MINUTES))
+    max_publish_time = floor_to_minute(now_utc + timedelta(days=FACEBOOK_SCHEDULE_MAX_DAYS))
 
     if scheduled_dt < min_publish_time:
         scheduled_dt = min_publish_time
@@ -1214,8 +1223,8 @@ def normalize_scheduled_time_for_facebook(scheduled_time):
 def get_facebook_schedule_window():
     """Return the current UTC window accepted by Facebook for scheduled posts."""
     now_utc = datetime.now(timezone.utc)
-    min_publish_time = ceil_to_next_minute(now_utc + timedelta(minutes=11))
-    max_publish_time = floor_to_minute(now_utc + timedelta(days=75) - timedelta(minutes=1))
+    min_publish_time = ceil_to_next_minute(now_utc + timedelta(minutes=FACEBOOK_SCHEDULE_MIN_MINUTES))
+    max_publish_time = floor_to_minute(now_utc + timedelta(days=FACEBOOK_SCHEDULE_MAX_DAYS))
     return min_publish_time, max_publish_time
 
 
