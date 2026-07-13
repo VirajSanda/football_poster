@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 from models import db, FootballNews
 from config import Config
 from app import app
@@ -455,6 +456,8 @@ def _process_fifa_api_data(data: Dict, source_name: str) -> List[Dict]:
                 continue
 
             image_url = _extract_fifa_image(item)
+            if not image_url and url:
+                image_url = _extract_fifa_image_from_article_page(url)
 
             if not looks_like_football(title, summary, url):
                 continue
@@ -475,19 +478,103 @@ def _process_fifa_api_data(data: Dict, source_name: str) -> List[Dict]:
 
     return results
 
+
 def _extract_fifa_image(item: Dict) -> str | None:
-    """Extract FIFA image URL across all known schema variations"""
+    """Extract FIFA image URL across all known schema variations."""
     image = item.get("image")
     if isinstance(image, dict):
-        return image.get("src") or image.get("url")
+        image_url = image.get("src") or image.get("url")
+        if image_url:
+            return image_url
 
     images = item.get("images")
     if isinstance(images, list) and images:
-        return images[0].get("src")
+        for img in images:
+            if not isinstance(img, dict):
+                continue
+            image_url = img.get("src") or img.get("url")
+            if image_url:
+                return image_url
 
     hero = item.get("heroImage")
     if isinstance(hero, dict):
-        return hero.get("src")
+        image_url = hero.get("src") or hero.get("url")
+        if image_url:
+            return image_url
+
+    # Some FIFA entries expose the image under asset metadata or alternate keys
+    for key in ["imageUrl", "mediaUrl", "src", "url"]:
+        value = item.get(key)
+        if isinstance(value, str) and value.startswith("http"):
+            return value
+
+    return None
+
+
+def _extract_fifa_image_from_article_page(article_url: str) -> str | None:
+    """Fetch the article page and recover the hero image from the markup."""
+    try:
+        response = requests.get(article_url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+        return _extract_fifa_image_from_article_html(response.text, article_url)
+    except Exception as e:
+        logger.debug("Unable to fetch FIFA article page for image extraction: %s", e)
+        return None
+
+
+def _extract_fifa_image_from_article_html(html: str, article_url: str) -> str | None:
+    """Extract the FIFA hero image from server-rendered markup or embedded JSON."""
+    if not html:
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Prefer explicit Open Graph / Twitter tags when present.
+    for tag_name, attrs in [
+        ("meta", {"property": "og:image"}),
+        ("meta", {"name": "twitter:image"}),
+        ("meta", {"property": "twitter:image"}),
+    ]:
+        tag = soup.find(tag_name, attrs=attrs)
+        if tag and tag.get("content"):
+            content = tag.get("content").strip()
+            if content.startswith("http"):
+                return content
+
+    # Look for hero image containers used by FIFA markup.
+    hero_candidates = []
+    for container in soup.select('[class*="heroImage"], [class*="hero-image"], [class*="HeroImage"], [class*="article-section_heroImage"]'):
+        hero_candidates.append(container)
+
+    for container in hero_candidates:
+        for img in container.select('img[picture], img[src], img[data-src]'):
+            candidate = img.get("src") or img.get("data-src")
+            if candidate and candidate.startswith("http"):
+                return candidate
+        for source in container.select('source[srcset], source[data-srcset]'):
+            candidate = source.get("srcset") or source.get("data-srcset")
+            if candidate:
+                first = candidate.split(",")[0].strip().split()[0]
+                if first.startswith("http"):
+                    return first
+
+    # Scan for any picture/img tags in the markup.
+    for img in soup.select('img[src], img[data-src]'):
+        candidate = img.get("src") or img.get("data-src")
+        if candidate and candidate.startswith("http"):
+            return candidate
+
+    # Fallback to high-confidence digitalhub URLs embedded in JSON or script data.
+    for match in re.finditer(r'https://digitalhub\.fifa\.com[^\s"\']+', html):
+        candidate = match.group(0)
+        if candidate.startswith('http'):
+            return candidate.split('"')[0].split("'")[0]
+
+    # As a last resort, use a relative src from the first image if it looks like a hero asset.
+    for img in soup.select('img[src], img[data-src]'):
+        candidate = img.get("src") or img.get("data-src")
+        if candidate and not candidate.startswith("http"):
+            return urljoin(article_url, candidate)
 
     return None
 
