@@ -1650,6 +1650,18 @@ def insert_articles(session, articles, dry_run=False):
             created_at=datetime.now(timezone.utc)
         )
 
+        # If the incoming article provided a scheduled_time, normalize/clamp it
+        # into Facebook's allowed window (uses FACEBOOK_SCHEDULE_MIN_MINUTES
+        # and FACEBOOK_SCHEDULE_MAX_DAYS). This ensures stored scheduled times
+        # are consistent with what will be accepted when scheduling on FB.
+        if a.get("scheduled_time"):
+            try:
+                scheduled_dt, _ = normalize_scheduled_time_for_facebook(a.get("scheduled_time"))
+                row.scheduled_time = scheduled_dt
+            except Exception:
+                # If normalization fails, leave scheduled_time as None
+                row.scheduled_time = None
+
         if not dry_run:
             session.add(row)
 
@@ -1740,6 +1752,11 @@ def run_scraper(dry_run=False):
         # Get recent Facebook posts and scheduled posts for duplicate checking
         recent_posts = get_recent_facebook_posts()
         logger.info("Fetched %d recent Facebook posts for duplicate checking", len(recent_posts))
+
+        # Cleanup: remove old unscheduled posts that are outside the schedule window
+        removed_old = remove_old_unscheduled_posts(session)
+        if removed_old:
+            logger.info("Cleanup removed %d old unscheduled DB rows", removed_old)
 
         # Filter out potential duplicates before insertion
         filtered_articles = []
