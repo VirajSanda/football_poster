@@ -960,15 +960,20 @@ def is_duplicate_post(title, summary, recent_posts, check_url=None):
 def is_valid_article(a):
     if not a["title"] or len(a["title"]) < 15:
         return False
-    
+
     if not a["url"] or not a["url"].startswith("http"):
         return False
-    
+
     # avoid junk titles
     bad_patterns = ["click here", "read more", "subscribe", "sign up"]
     if any(bp in a["title"].lower() for bp in bad_patterns):
         return False
-    
+
+    has_media = bool((a.get("image_url") or "").strip() or (a.get("video_url") or "").strip())
+    if not has_media:
+        logger.info("Skipping article without media: %s", a.get("title"))
+        return False
+
     return True
 
 def get_scheduled_posts(session):
@@ -1176,6 +1181,11 @@ def schedule_new_posts(session, dry_run=False):
             # 3. Check against already scheduled posts (including those scheduled in this run)
             if is_already_scheduled(session, post.title, post.url):
                 logger.warning("Skipping already scheduled: %s", post.title)
+                continue
+
+            has_media = bool((post.image_url or "").strip() or (post.video_url or "").strip())
+            if not has_media:
+                logger.warning("Skipping scheduling post without media: %s", post.title)
                 continue
 
             seen_titles_in_this_batch.add(current_title_lower)
