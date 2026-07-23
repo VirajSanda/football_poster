@@ -36,7 +36,7 @@ def sha256_hex(s: str) -> str:
 
 POST_GAP_HOURS = int(os.environ.get("POST_GAP_HOURS", 2))
 FACEBOOK_SCHEDULE_MIN_MINUTES = int(os.environ.get("FACEBOOK_SCHEDULE_MIN_MINUTES", 15))
-FACEBOOK_SCHEDULE_MAX_DAYS = int(os.environ.get("FACEBOOK_SCHEDULE_MAX_DAYS", 29))
+FACEBOOK_SCHEDULE_MAX_DAYS = int(os.environ.get("FACEBOOK_SCHEDULE_MAX_DAYS", 2))
 
 # Football keywords (SOCCER ONLY - excluding American football)
 FOOTBALL_KEYWORDS = [
