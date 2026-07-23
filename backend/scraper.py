@@ -1376,6 +1376,33 @@ def repair_stored_scheduled_times(session):
         )
 
     return updated_count, cleared_count
+
+
+def remove_old_unscheduled_posts(session):
+    """
+    Remove unscheduled, unposted posts that are older than the configured
+    `FACEBOOK_SCHEDULE_MAX_DAYS`. These stale rows are not useful and
+    may interfere with scheduling logic.
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=FACEBOOK_SCHEDULE_MAX_DAYS)
+        res = session.query(FootballNews).filter(
+            FootballNews.posted == False,
+            FootballNews.scheduled_time.is_(None),
+            FootballNews.created_at < cutoff
+        ).delete(synchronize_session='fetch')
+        if res:
+            session.commit()
+            logger.info("🧹 Removed %d old unscheduled posts older than %d days", res, FACEBOOK_SCHEDULE_MAX_DAYS)
+        return int(res)
+    except Exception as e:
+        logger.error("Failed to remove old unscheduled posts: %s", e, exc_info=True)
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        return 0
     
 
 def is_probably_video_url(url: str) -> bool:
